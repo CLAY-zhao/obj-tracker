@@ -31,9 +31,9 @@ setuptools.setup(
     package_data=package_data,
     ext_modules=[
         setuptools.Extension(
-            "objtracker.objtracker",
+            "objtracker.tracker",
             sources=[
-                # "src/objtracker/modules/utils.c",
+                "src/objtracker/modules/utils.c",
                 "src/objtracker/modules/objtracker.c"
             ],
             extra_compile_args={"win32": []}.get(sys.platform, ["-Werror", "-std=c99"]),

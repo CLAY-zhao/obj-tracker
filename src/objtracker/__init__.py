@@ -1,10 +1,10 @@
-from .objtracker import ObjTracker
+from .objtrace import Tracker
 
 __version__ = "1.0.0"
 
 __all__ = [
   "__version__",
-  "objtracker"
+  "objtrace"
 ]
 
-objtracker = ObjTracker()
+objtrace = Tracker()

@@ -3,14 +3,14 @@
 
 #include <Python.h>
 
+#define PY_FUNCTION 1
+#define PY_METHOD 2
+
 struct ObjectNode
 {
   struct ObjectNode *next;
-  PyObject* name;
-  PyObject* tail;
-  PyObject* filename;
-  PyObject* codestring;
-  int lineno;
+  PyObject* obj;
+  int type;
 };
 
 typedef struct

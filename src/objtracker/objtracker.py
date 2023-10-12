@@ -1,2 +1,0 @@
-class ObjTracker(object):
-  pass
