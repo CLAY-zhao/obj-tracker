@@ -1,4 +1,5 @@
 import inspect
+from types import MethodType
 
 import objtracker.tracker as objtracker
 
@@ -14,8 +15,10 @@ class Tracker(object):
     self._objtracker = objtracker.ObjTracker()
     self.initialized = True
     
-  def ftrace(self, callable_obj) -> None:
+  def trace(self, callable_obj) -> None:
     frame = inspect.currentframe().f_back
+    if isinstance(callable_obj, MethodType):
+      pass
     self._objtracker.ftrace(callable_obj, frame=frame)
     del frame
     

@@ -45,6 +45,8 @@ objtracker_tracefunc(PyObject *obj, PyFrameObject *frame, int what, PyObject *ar
   PyObject *args = PyTuple_New(1);
   PyTuple_SET_ITEM(args, 0, (PyObject *) frame);
 
+  PyFunctionObject *func = NULL;
+  PyCodeObject *code = NULL;
   PyObject *varnames = NULL;
   PyObject *argname = NULL;
   PyObject *kwname = NULL;
@@ -55,15 +57,15 @@ objtracker_tracefunc(PyObject *obj, PyFrameObject *frame, int what, PyObject *ar
     while (node) {
       switch (node->type) {
       case PY_FUNCTION:
-        PyFunctionObject *func = (PyFunctionObject *)node->obj;
-        PyCodeObject *code = (PyCodeObject *)func->func_code;
+        func = (PyFunctionObject *)node->obj;
+        code = (PyCodeObject *)func->func_code;
         if (PyObject_RichCompareBool(code->co_name, func_name, Py_EQ)) {
           PyObject *argvaluesinfo = PyObject_CallObject(getargvalues_method, args);
           if (!argvaluesinfo) {
             perror("Failed to call inspect.getargvalues()");
             exit(-1);
           }
-          Print_Py(argvaluesinfo);
+          Print_Trace_Info(argvaluesinfo, filename, lineno);
         }
         break;
       case PY_METHOD:
@@ -74,8 +76,6 @@ objtracker_tracefunc(PyObject *obj, PyFrameObject *frame, int what, PyObject *ar
       }
       node = node->next;
     }
-  } else if (what == PyTrace_RETURN) {
-    Print_Py(filename);
   }
 
   return 0;
