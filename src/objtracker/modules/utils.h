@@ -5,6 +5,6 @@
 
 void Print_Py(PyObject *o);
 void Print_Obj(PyObject *o);
-void Print_Trace_Info(PyObject *arginfo, PyObject *filename, int lineno);
+void Print_Trace_Info(PyFrameObject *frame, PyObject *arginfo, PyObject *filename, int lineno, int log_stack);
 
 #endif

@@ -16,6 +16,7 @@ static PyMethodDef ObjTrakcer_methods[] = {
 };
 
 PyObject* inspect_module = NULL;
+PyObject* traceback_module = NULL;
 
 // ============================================================================
 // Python interface
@@ -43,7 +44,8 @@ objtracker_tracefunc(PyObject *obj, PyFrameObject *frame, int what, PyObject *ar
     exit(-1);
   }
   PyObject *args = PyTuple_New(1);
-  PyTuple_SET_ITEM(args, 0, (PyObject *) frame);
+  PyTuple_SetItem(args, 0, (PyObject *) frame);
+  Py_INCREF(frame);
 
   PyFunctionObject *func = NULL;
   PyCodeObject *code = NULL;
@@ -65,7 +67,7 @@ objtracker_tracefunc(PyObject *obj, PyFrameObject *frame, int what, PyObject *ar
             perror("Failed to call inspect.getargvalues()");
             exit(-1);
           }
-          Print_Trace_Info(argvaluesinfo, filename, lineno);
+          Print_Trace_Info(frame, argvaluesinfo, filename, lineno, node->log_stack);
         }
         break;
       case PY_METHOD:
@@ -78,19 +80,24 @@ objtracker_tracefunc(PyObject *obj, PyFrameObject *frame, int what, PyObject *ar
     }
   }
 
+  Py_DECREF(args);
+  Py_DECREF(getargvalues_method);
+
   return 0;
 }
 
 static PyObject *
 objtracker_ftrace(ObjTrackerObject *self, PyObject *args, PyObject *kwds)
 {
-  static char* kwlist[] = {"callable_obj", "frame", NULL};
+  static char* kwlist[] = {"callable_obj", "frame", "log_stack", NULL};
   PyObject *kw_callable_obj = NULL;
   PyFrameObject *frame = NULL;
+  int kw_log_stack = 0;
   int type = 0;
-  if (!PyArg_ParseTupleAndKeywords(args, kwds, "O|O", kwlist,
+  if (!PyArg_ParseTupleAndKeywords(args, kwds, "O|Oi", kwlist,
         &kw_callable_obj,
-        &frame)) {
+        &frame,
+        &kw_log_stack)) {
     return NULL;
   }
   if (PyCallable_Check(kw_callable_obj) < 0) {
@@ -110,6 +117,7 @@ objtracker_ftrace(ObjTrackerObject *self, PyObject *args, PyObject *kwds)
   struct ObjectNode *node = (struct ObjectNode *)PyMem_Calloc(1, sizeof(struct ObjectNode));
   node->obj = kw_callable_obj;
   node->type = type;
+  node->log_stack = kw_log_stack;
   if (self->trackernode == NULL) {
     self->trackernode = node;
     self->trackernode->next = NULL;
@@ -132,6 +140,7 @@ ObjTracker_New(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 {
   ObjTrackerObject *self = (ObjTrackerObject *)type->tp_alloc(type, 0);
   self->trace_total = 0;
+  self->collecting = 0;
   self->output_file = NULL;
   self->trackernode = NULL;
   return (PyObject *)self;
@@ -178,6 +187,7 @@ PyInit_tracker(void)
   }
 
   inspect_module = PyImport_ImportModule("inspect");
+  traceback_module = PyImport_ImportModule("traceback");
 
   return m;
 }
