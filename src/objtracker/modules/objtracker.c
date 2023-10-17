@@ -49,10 +49,6 @@ objtracker_tracefunc(PyObject *obj, PyFrameObject *frame, int what, PyObject *ar
 
   PyFunctionObject *func = NULL;
   PyCodeObject *code = NULL;
-  PyObject *varnames = NULL;
-  PyObject *argname = NULL;
-  PyObject *kwname = NULL;
-  PyObject *locals = NULL;
 
   node = self->trackernode;
   if (what == PyTrace_CALL) {
