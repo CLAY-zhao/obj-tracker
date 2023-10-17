@@ -5,6 +5,8 @@
 #include "objtracker.h"
 #include "utils.h"
 
+#define EQ(left, right) PyObject_RichCompareBool(left, right, Py_EQ)
+
 // Function declarations
 
 int objtracker_tracefunc(PyObject *obj, PyFrameObject *frame, int what, PyObject *arg);
@@ -57,16 +59,32 @@ objtracker_tracefunc(PyObject *obj, PyFrameObject *frame, int what, PyObject *ar
       case PY_FUNCTION:
         func = (PyFunctionObject *)node->obj;
         code = (PyCodeObject *)func->func_code;
-        if (PyObject_RichCompareBool(code->co_name, func_name, Py_EQ)) {
+        if (EQ(code->co_name, func_name)) {
           PyObject *argvaluesinfo = PyObject_CallObject(getargvalues_method, args);
           if (!argvaluesinfo) {
             perror("Failed to call inspect.getargvalues()");
             exit(-1);
           }
           Print_Trace_Info(frame, argvaluesinfo, filename, lineno, node->log_stack);
+          Py_DECREF(argvaluesinfo);
         }
         break;
       case PY_METHOD:
+        func = (PyFunctionObject *)node->obj;
+        code = (PyCodeObject *)func->func_code;
+        PyObject* __dict__ = PyObject_GetAttrString(node->origin, "__dict__");
+        PyObject* function = PyMapping_GetItemString(__dict__, PyUnicode_AsUTF8(code->co_name));
+        if (PyFunction_Check(function) && EQ(code->co_name, func_name)) {
+          PyObject *argvaluesinfo = PyObject_CallObject(getargvalues_method, args);
+          if (!argvaluesinfo) {
+            perror("Failed to call inspect.getargvalues()");
+            exit(-1);
+          }
+          Print_Trace_Info(frame, argvaluesinfo, filename, lineno, node->log_stack);
+          Py_DECREF(argvaluesinfo);
+        }
+        Py_DECREF(__dict__);
+        Py_DECREF(function);
         break;
       default:
         printf("Unknown Node Type!\n");
@@ -85,14 +103,16 @@ objtracker_tracefunc(PyObject *obj, PyFrameObject *frame, int what, PyObject *ar
 static PyObject *
 objtracker_ftrace(ObjTrackerObject *self, PyObject *args, PyObject *kwds)
 {
-  static char* kwlist[] = {"callable_obj", "frame", "log_stack", NULL};
+  static char* kwlist[] = {"callable_obj", "frame", "origin", "log_stack", NULL};
   PyObject *kw_callable_obj = NULL;
   PyFrameObject *frame = NULL;
+  PyObject *kw_origin = NULL;
   int kw_log_stack = 0;
   int type = 0;
-  if (!PyArg_ParseTupleAndKeywords(args, kwds, "O|Oi", kwlist,
+  if (!PyArg_ParseTupleAndKeywords(args, kwds, "O|OOi", kwlist,
         &kw_callable_obj,
         &frame,
+        &kw_origin,
         &kw_log_stack)) {
     return NULL;
   }
@@ -105,6 +125,8 @@ objtracker_ftrace(ObjTrackerObject *self, PyObject *args, PyObject *kwds)
     type = PY_FUNCTION;
   } else if (PyMethod_Check(kw_callable_obj)) {
     type = PY_METHOD;
+    PyMethodObject *method = (PyMethodObject *)kw_callable_obj;
+    kw_callable_obj = (PyObject *)method->im_func;
   } else {
     PyErr_SetString(PyExc_ValueError, "Is not a callable object");
     return NULL;
@@ -112,6 +134,7 @@ objtracker_ftrace(ObjTrackerObject *self, PyObject *args, PyObject *kwds)
 
   struct ObjectNode *node = (struct ObjectNode *)PyMem_Calloc(1, sizeof(struct ObjectNode));
   node->obj = kw_callable_obj;
+  node->origin = kw_origin;
   node->type = type;
   node->log_stack = kw_log_stack;
   if (self->trackernode == NULL) {

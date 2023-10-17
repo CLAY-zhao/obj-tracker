@@ -12,6 +12,7 @@ struct ObjectNode
 {
   struct ObjectNode *next;
   PyObject* obj;
+  PyObject* origin;
   int type;
   int log_stack;
 };

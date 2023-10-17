@@ -22,7 +22,7 @@ class Tracker(object):
       cls = callable_obj.__self__.__class__
     else:
       cls = None
-    self._objtracker.ftrace(callable_obj, frame=frame, cls=cls, log_stack=log_stack)
+    self._objtracker.ftrace(callable_obj, frame=frame, origin=cls, log_stack=log_stack)
     del frame
     
   def install(self, func="tracker") -> None:
