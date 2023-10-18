@@ -5,6 +5,8 @@
 
 #define PY_FUNCTION 1
 #define PY_METHOD 2
+#define PY_CLASS 3
+#define PY_MODULE 4
 
 PyObject* traceback_module;
 

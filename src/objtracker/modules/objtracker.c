@@ -51,6 +51,7 @@ objtracker_tracefunc(PyObject *obj, PyFrameObject *frame, int what, PyObject *ar
 
   PyFunctionObject *func = NULL;
   PyCodeObject *code = NULL;
+  PyObject *argvaluesinfo = NULL;
 
   node = self->trackernode;
   if (what == PyTrace_CALL) {
@@ -60,11 +61,12 @@ objtracker_tracefunc(PyObject *obj, PyFrameObject *frame, int what, PyObject *ar
         func = (PyFunctionObject *)node->obj;
         code = (PyCodeObject *)func->func_code;
         if (EQ(code->co_name, func_name)) {
-          PyObject *argvaluesinfo = PyObject_CallObject(getargvalues_method, args);
+          argvaluesinfo = PyObject_CallObject(getargvalues_method, args);
           if (!argvaluesinfo) {
             perror("Failed to call inspect.getargvalues()");
             exit(-1);
           }
+          Py_INCREF(argvaluesinfo);
           Print_Trace_Info(frame, argvaluesinfo, filename, lineno, node->log_stack);
           Py_DECREF(argvaluesinfo);
         }
@@ -75,16 +77,43 @@ objtracker_tracefunc(PyObject *obj, PyFrameObject *frame, int what, PyObject *ar
         PyObject* __dict__ = PyObject_GetAttrString(node->origin, "__dict__");
         PyObject* function = PyMapping_GetItemString(__dict__, PyUnicode_AsUTF8(code->co_name));
         if (PyFunction_Check(function) && EQ(code->co_name, func_name)) {
-          PyObject *argvaluesinfo = PyObject_CallObject(getargvalues_method, args);
+          argvaluesinfo = PyObject_CallObject(getargvalues_method, args);
           if (!argvaluesinfo) {
             perror("Failed to call inspect.getargvalues()");
             exit(-1);
           }
+          Py_INCREF(argvaluesinfo);
           Print_Trace_Info(frame, argvaluesinfo, filename, lineno, node->log_stack);
           Py_DECREF(argvaluesinfo);
         }
         Py_DECREF(__dict__);
         Py_DECREF(function);
+        break;
+      case PY_MODULE:
+        break;
+      case PY_CLASS:
+        PyObject *mro, *base, *dict, *attr;
+        mro = PyObject_GetAttrString(node->origin, "__mro__");
+        Py_ssize_t n = PyTuple_GET_SIZE(mro);
+        for (Py_ssize_t i = 0; i < n; i++) {
+          base = PyTuple_GET_ITEM(mro, i);
+          assert(PyType_Check(base));
+          dict = ((PyTypeObject *)base)->tp_dict;
+          assert(dict && PyDict_Check(dict));
+          attr = PyDict_GetItem(dict, func_name);
+          if (attr != NULL) {
+            argvaluesinfo = PyObject_CallObject(getargvalues_method, args);
+            if (!argvaluesinfo) {
+              perror("Failed to call inspect.getargvalues()");
+              exit(-1);
+            }
+            Py_INCREF(argvaluesinfo);
+            Print_Trace_Info(frame, argvaluesinfo, filename, lineno, node->log_stack);
+            Py_DECREF(argvaluesinfo);
+            break;
+          }
+        }
+        Py_DECREF(mro);
         break;
       default:
         printf("Unknown Node Type!\n");
@@ -116,20 +145,16 @@ objtracker_ftrace(ObjTrackerObject *self, PyObject *args, PyObject *kwds)
         &kw_log_stack)) {
     return NULL;
   }
-  if (PyCallable_Check(kw_callable_obj) < 0) {
-    PyErr_SetString(PyExc_ValueError, "Is not a callable object");
-    return NULL;
-  }
-
   if (PyFunction_Check(kw_callable_obj)) {
     type = PY_FUNCTION;
   } else if (PyMethod_Check(kw_callable_obj)) {
     type = PY_METHOD;
     PyMethodObject *method = (PyMethodObject *)kw_callable_obj;
     kw_callable_obj = (PyObject *)method->im_func;
+  } else if (PyModule_Check(kw_callable_obj)) {
+    type = PY_MODULE;
   } else {
-    PyErr_SetString(PyExc_ValueError, "Is not a callable object");
-    return NULL;
+    type = PY_CLASS;
   }
 
   struct ObjectNode *node = (struct ObjectNode *)PyMem_Calloc(1, sizeof(struct ObjectNode));

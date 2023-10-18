@@ -74,6 +74,8 @@ void Print_Trace_Info(PyFrameObject *frame, PyObject *arginfo, PyObject *filenam
     for (int index = 0; index < size; index++) {
       name = PyList_GetItem(varnames, index);
       value = PyDict_GetItem(locals, name);
+      Py_INCREF(name);
+      Py_INCREF(value);
       if (PyNumber_Check(value)) {
         Printer(ASUTF8(PyUnicode_FromFormat("%s%s: [int | float] = %s", "    ", ASUTF8(name), ASUTF8(PyObject_Repr(value)))), WHITE);
       } else if (PyUnicode_Check(value)) {
@@ -81,14 +83,20 @@ void Print_Trace_Info(PyFrameObject *frame, PyObject *arginfo, PyObject *filenam
       } else {
         Printer(ASUTF8(PyUnicode_FromFormat("%s%s: any = %s", "    ", ASUTF8(name), ASUTF8(PyObject_Repr(value)))), CYAN);
       }
+      Py_DECREF(name);
+      Py_DECREF(value);
     }
     if (argname != Py_None) {
       value = PyDict_GetItem(locals, argname);
+      Py_INCREF(value);
       Printer(ASUTF8(PyUnicode_FromFormat("%s*%s: %s", "    ", ASUTF8(argname), ASUTF8(PyObject_Repr(value)))), YELLOW);
+      Py_DECREF(value);
     }
     if (kwname != Py_None) {
+      Py_INCREF(value);
       value = PyDict_GetItem(locals, kwname);
       Printer(ASUTF8(PyUnicode_FromFormat("%s**%s: %s", "    ", ASUTF8(kwname), ASUTF8(PyObject_Repr(value)))), YELLOW);
+      Py_DECREF(value);
     }
     Printer(">", MAGENTA);
   }
@@ -98,8 +106,6 @@ void Print_Trace_Info(PyFrameObject *frame, PyObject *arginfo, PyObject *filenam
   Py_DECREF(argname);
   Py_DECREF(kwname);
   Py_DECREF(locals);
-  Py_XDECREF(name);
-  Py_XDECREF(value);
 }
 
 void Print_Stack(PyFrameObject *frame)
