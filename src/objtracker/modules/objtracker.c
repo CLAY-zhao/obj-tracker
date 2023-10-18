@@ -130,9 +130,12 @@ objtracker_tracefunc(PyObject *obj, PyFrameObject *frame, int what, PyObject *ar
       node = node->next;
     }
   } else if (what == PyTrace_LINE) {
-    
+    if (strcmp(PyUnicode_AsUTF8(func_name), "<module>"))
+      goto exit;
+    // Checked as a built-in method that cannot be traced and will be ignored
   }
 
+exit:
   Py_DECREF(args);
   Py_DECREF(getargvalues_method);
 
