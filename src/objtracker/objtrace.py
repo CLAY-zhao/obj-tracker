@@ -1,6 +1,6 @@
 import sys
 import inspect
-from types import MethodType, FunctionType
+from types import MethodType, FunctionType, ModuleType
 
 import objtracker.tracker as objtracker
 
@@ -20,7 +20,7 @@ class Tracker(object):
     frame = inspect.currentframe().f_back
     if isinstance(callable_obj, MethodType):
       cls = callable_obj.__self__.__class__
-    elif isinstance(callable_obj, FunctionType):
+    elif isinstance(callable_obj, (FunctionType, ModuleType)):
       cls = None
     elif hasattr(callable_obj, "__call__"):
       cls = callable_obj if callable_obj.__class__ is type else callable_obj.__class__

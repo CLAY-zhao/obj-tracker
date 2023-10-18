@@ -90,6 +90,14 @@ objtracker_tracefunc(PyObject *obj, PyFrameObject *frame, int what, PyObject *ar
         Py_DECREF(function);
         break;
       case PY_MODULE:
+        argvaluesinfo = PyObject_CallObject(getargvalues_method, args);
+        if (!argvaluesinfo) {
+          perror("Failed to call inspect.getargvalues()");
+          exit(-1);
+        }
+        Py_INCREF(argvaluesinfo);
+        Print_Trace_Info(frame, argvaluesinfo, filename, lineno, node->log_stack);
+        Py_DECREF(argvaluesinfo);
         break;
       case PY_CLASS:
         PyObject *mro, *base, *dict, *attr;
@@ -121,6 +129,8 @@ objtracker_tracefunc(PyObject *obj, PyFrameObject *frame, int what, PyObject *ar
       }
       node = node->next;
     }
+  } else if (what == PyTrace_LINE) {
+    
   }
 
   Py_DECREF(args);
