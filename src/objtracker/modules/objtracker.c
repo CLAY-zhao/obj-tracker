@@ -10,15 +10,20 @@
 // Function declarations
 
 int objtracker_tracefunc(PyObject *obj, PyFrameObject *frame, int what, PyObject *arg);
+static PyObject* objtracker_start(ObjTrackerObject *self, PyObject *args);
+static PyObject* objtracker_stop(ObjTrackerObject *self, PyObject *args);
 static PyObject* objtracker_ftrace(ObjTrackerObject *self, PyObject *args, PyObject *kwds);
 
+ObjTrackerObject* curr_tracker = NULL;
+PyObject* inspect_module = NULL;
+PyObject* traceback_module = NULL;
+
 static PyMethodDef ObjTrakcer_methods[] = {
+  {"start", (PyCFunction)objtracker_start, METH_VARARGS, "start tracker"},
+  {"stop", (PyCFunction)objtracker_stop, METH_VARARGS, "stop tracker"},
   {"ftrace", (PyCFunction)objtracker_ftrace, METH_VARARGS | METH_KEYWORDS, "trace func callable"},
   {NULL, NULL, 0, NULL}
 };
-
-PyObject* inspect_module = NULL;
-PyObject* traceback_module = NULL;
 
 // ============================================================================
 // Python interface
@@ -29,6 +34,33 @@ objtracker_tracefuncdisabled(PyObject *obj, PyFrameObject *frame, int what, PyOb
 {
   PyEval_SetTrace(objtracker_tracefunc, obj);
   return objtracker_tracefunc(obj, frame, what, arg);
+}
+
+static PyObject*
+objtracker_start(ObjTrackerObject *self, PyObject *args)
+{
+  if (curr_tracker) {
+    printf("Warning! Overwrite tracker! You should not have two ObjTracker recording at the same time");
+  } else {
+    curr_tracker = self;
+  }
+
+  self->collecting = 1;
+  PyEval_SetTrace(objtracker_tracefunc, (PyObject *) self);
+
+  Py_RETURN_NONE;
+}
+
+static PyObject*
+objtracker_stop(ObjTrackerObject *self, PyObject *args)
+{
+  if (self) {
+    self->collecting = 0;
+  }
+  curr_tracker = NULL;
+  PyEval_SetTrace(NULL, NULL);
+
+  Py_RETURN_NONE;
 }
 
 int
@@ -51,91 +83,23 @@ objtracker_tracefunc(PyObject *obj, PyFrameObject *frame, int what, PyObject *ar
 
   PyFunctionObject *func = NULL;
   PyCodeObject *code = NULL;
-  PyObject *argvaluesinfo = NULL;
+  PyObject *arg_value_info = NULL;
 
-  node = self->trackernode;
+  // node = self->trackernode;
   if (what == PyTrace_CALL) {
-    while (node) {
-      switch (node->type) {
-      case PY_FUNCTION:
-        func = (PyFunctionObject *)node->obj;
-        code = (PyCodeObject *)func->func_code;
-        if (EQ(code->co_name, func_name)) {
-          argvaluesinfo = PyObject_CallObject(getargvalues_method, args);
-          if (!argvaluesinfo) {
-            perror("Failed to call inspect.getargvalues()");
-            exit(-1);
-          }
-          Py_INCREF(argvaluesinfo);
-          Print_Trace_Info(frame, argvaluesinfo, filename, lineno, node->log_stack);
-          Py_DECREF(argvaluesinfo);
-        }
-        break;
-      case PY_METHOD:
-        func = (PyFunctionObject *)node->obj;
-        code = (PyCodeObject *)func->func_code;
-        PyObject* __dict__ = PyObject_GetAttrString(node->origin, "__dict__");
-        PyObject* function = PyMapping_GetItemString(__dict__, PyUnicode_AsUTF8(code->co_name));
-        if (PyFunction_Check(function) && EQ(code->co_name, func_name)) {
-          argvaluesinfo = PyObject_CallObject(getargvalues_method, args);
-          if (!argvaluesinfo) {
-            perror("Failed to call inspect.getargvalues()");
-            exit(-1);
-          }
-          Py_INCREF(argvaluesinfo);
-          Print_Trace_Info(frame, argvaluesinfo, filename, lineno, node->log_stack);
-          Py_DECREF(argvaluesinfo);
-        }
-        Py_DECREF(__dict__);
-        Py_DECREF(function);
-        break;
-      case PY_MODULE:
-        argvaluesinfo = PyObject_CallObject(getargvalues_method, args);
-        if (!argvaluesinfo) {
-          perror("Failed to call inspect.getargvalues()");
-          exit(-1);
-        }
-        Py_INCREF(argvaluesinfo);
-        Print_Trace_Info(frame, argvaluesinfo, filename, lineno, node->log_stack);
-        Py_DECREF(argvaluesinfo);
-        break;
-      case PY_CLASS:
-        PyObject *mro, *base, *dict, *attr;
-        mro = PyObject_GetAttrString(node->origin, "__mro__");
-        Py_ssize_t n = PyTuple_GET_SIZE(mro);
-        for (Py_ssize_t i = 0; i < n; i++) {
-          base = PyTuple_GET_ITEM(mro, i);
-          assert(PyType_Check(base));
-          dict = ((PyTypeObject *)base)->tp_dict;
-          assert(dict && PyDict_Check(dict));
-          attr = PyDict_GetItem(dict, func_name);
-          if (attr != NULL) {
-            argvaluesinfo = PyObject_CallObject(getargvalues_method, args);
-            if (!argvaluesinfo) {
-              perror("Failed to call inspect.getargvalues()");
-              exit(-1);
-            }
-            Py_INCREF(argvaluesinfo);
-            Print_Trace_Info(frame, argvaluesinfo, filename, lineno, node->log_stack);
-            Py_DECREF(argvaluesinfo);
-            break;
-          }
-        }
-        Py_DECREF(mro);
-        break;
-      default:
-        printf("Unknown Node Type!\n");
-        exit(1);
-      }
-      node = node->next;
+    arg_value_info = PyObject_CallObject(getargvalues_method, args);
+    if (!arg_value_info) {
+      perror("Failed to call inspect.getargvalues()");
+      exit(-1);
     }
-  } else if (what == PyTrace_LINE) {
-    if (strcmp(PyUnicode_AsUTF8(func_name), "<module>"))
-      goto exit;
-    // Checked as a built-in method that cannot be traced and will be ignored
+    Py_INCREF(arg_value_info);
+    if (PyObject_Repr(arg_value_info) != NULL) {
+      Print_Trace_Info(frame, arg_value_info, filename, lineno, 0);
+    } else {
+      Print_Py(arg_value_info);
+    }
   }
 
-exit:
   Py_DECREF(args);
   Py_DECREF(getargvalues_method);
 

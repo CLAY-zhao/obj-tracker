@@ -22,8 +22,10 @@ enum Color {
 void Print_Py(PyObject *o)
 {
   PyObject *repr = PyObject_Repr(o);
-  printf("%s\n", ASUTF8(repr));
-  Py_DECREF(repr);
+  if (repr != NULL) {
+    printf("%s\n", ASUTF8(repr));
+  }
+  Py_XDECREF(repr);
 }
 
 void Print_Obj(PyObject *o)
@@ -70,7 +72,7 @@ void Print_Trace_Info(PyFrameObject *frame, PyObject *arginfo, PyObject *filenam
   PyObject *value = NULL;
 
   if (size > 0 || argname != Py_None || kwname != Py_None) {
-    Printer("<", MAGENTA);
+    Printer("<", CYAN);
     for (int index = 0; index < size; index++) {
       name = PyList_GetItem(varnames, index);
       value = PyDict_GetItem(locals, name);
@@ -98,7 +100,7 @@ void Print_Trace_Info(PyFrameObject *frame, PyObject *arginfo, PyObject *filenam
       Printer(ASUTF8(PyUnicode_FromFormat("%s**%s: %s", "    ", ASUTF8(kwname), ASUTF8(PyObject_Repr(value)))), YELLOW);
       Py_DECREF(value);
     }
-    Printer(">", MAGENTA);
+    Printer(">", CYAN);
   }
   Printer("", DEFAULT);
 
@@ -141,4 +143,12 @@ void Print_Stack(PyFrameObject *frame)
     Printer(ASUTF8(stack), RED);
   }
   Py_XDECREF(stack);
+}
+
+void Ignore_Builtin_Trace(PyObject *filename, int lineno)
+{
+  Printer("====== Trace Failed ======", RED);
+  Printer("Warning: Built-in methods cannot be tracked, Because it is implemented by CPython.", YELLOW);
+  Printer(ASUTF8(PyUnicode_Concat(PyUnicode_FromFormat("lineno: %d -> ", lineno), filename)), GREEN);
+  Printer("", DEFAULT);
 }

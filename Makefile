@@ -3,8 +3,14 @@
 build:
 	python setup.py build
 
+up:
+	python setup.py install -i https://pypi.tuna.tsinghua.edu.cn/simple/
+
 install:
-	python setup.py install
+	pip install . -i https://pypi.tuna.tsinghua.edu.cn/simple/
+
+ensure:
+	python -m ensurepip
 
 build_dist:
 	make clean

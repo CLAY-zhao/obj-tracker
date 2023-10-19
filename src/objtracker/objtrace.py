@@ -1,7 +1,7 @@
-import sys
 import inspect
 from types import MethodType, FunctionType, ModuleType
 
+from .color_util import COLOR
 import objtracker.tracker as objtracker
 
 
@@ -12,6 +12,8 @@ class Tracker(object):
     output_file: str = None
   ) -> None:
     self.initialized = False
+    self.enable = False
+    self.parsed = False
     self.output_file = output_file
     self._objtracker = objtracker.ObjTracker()
     self.initialized = True
@@ -29,6 +31,15 @@ class Tracker(object):
     self._objtracker.ftrace(callable_obj, frame=frame, origin=cls, log_stack=log_stack)
     del frame
     
+  def start(self):
+    self.enable = True
+    self.parsed = False
+    self._objtracker.start()
+  
+  def stop(self):
+    self.enable = False
+    self._objtracker.stop()
+    
   def install(self, func="tracker") -> None:
     import builtins
     setattr(builtins, func, self)
@@ -37,14 +48,3 @@ class Tracker(object):
     import builtins
     if hasattr(builtins, func):
       delattr(builtins, func)
-      
-
-if sys.platform == "win32":
-  try:
-    # https://stackoverflow.com/questions/36760127/...
-    # how-to-use-the-new-support-for-ansi-escape-sequences-in-the-windows-10-console
-    from ctypes import windll
-    kernel32 = windll.kernel32
-    kernel32.SetConsoleMode(kernel32.GetStdHandle(-11), 7)
-  except Exception:
-    pass
