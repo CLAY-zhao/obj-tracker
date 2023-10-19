@@ -53,18 +53,17 @@ void Printer(const char *content, enum Color color)
   printf("\033[0;%dm%s\033[0m\n", color, content);
 }
 
-void Print_Trace_Info(PyFrameObject *frame, PyObject *arginfo, PyObject *filename, int lineno, int log_stack)
+void Print_Trace_Info(PyFrameObject *frame, PyObject *arginfo, PyObject *objname, PyObject *filename, int lineno, int log_stack)
 {
   PyObject *varnames = PyObject_GetAttrString(arginfo, "args");
   PyObject *argname = PyObject_GetAttrString(arginfo, "varargs");
   PyObject *kwname = PyObject_GetAttrString(arginfo, "keywords");
   PyObject *locals = PyObject_GetAttrString(arginfo, "locals");
-
   Printer("====== Trace Triggered ======", RED);
   Printer("Call Stack (most recent call last):", RED);
   if (log_stack > 0)
     Print_Stack(frame);
-  Printer(ASUTF8(PyUnicode_Concat(PyUnicode_FromFormat("lineno: %d -> ", lineno), filename)), GREEN);
+  Printer(ASUTF8(PyUnicode_FromFormat("lineno: %d -> %s (call: %s)", lineno, ASUTF8(filename), ASUTF8(objname))), GREEN);
 
   // print attrs
   Py_ssize_t size = PyList_GET_SIZE(varnames);
@@ -78,10 +77,20 @@ void Print_Trace_Info(PyFrameObject *frame, PyObject *arginfo, PyObject *filenam
       value = PyDict_GetItem(locals, name);
       Py_INCREF(name);
       Py_INCREF(value);
-      if (PyNumber_Check(value)) {
-        Printer(ASUTF8(PyUnicode_FromFormat("%s%s: [int | float] = %s", "    ", ASUTF8(name), ASUTF8(PyObject_Repr(value)))), WHITE);
+      if (PyLong_Check(value)) {
+        Printer(ASUTF8(PyUnicode_FromFormat("%s%s: int = %s", "    ", ASUTF8(name), ASUTF8(PyObject_Repr(value)))), WHITE);
+      } else if (PyFloat_Check(value)) {
+        Printer(ASUTF8(PyUnicode_FromFormat("%s%s: float = %s", "    ", ASUTF8(name), ASUTF8(PyObject_Repr(value)))), WHITE);
       } else if (PyUnicode_Check(value)) {
-        Printer(ASUTF8(PyUnicode_FromFormat("%s%s: str = %s", "    ", ASUTF8(name), ASUTF8(PyObject_Repr(value)))), BLUE);
+        Printer(ASUTF8(PyUnicode_FromFormat("%s%s: str = %s", "    ", ASUTF8(name), ASUTF8(PyObject_Repr(value)))), WHITE);
+      } else if (PyList_Check(value)) {
+        Printer(ASUTF8(PyUnicode_FromFormat("%s%s: list = %s", "    ", ASUTF8(name), ASUTF8(PyObject_Repr(value)))), BLUE);
+      } else if (PyTuple_Check(value)) {
+        Printer(ASUTF8(PyUnicode_FromFormat("%s%s: tuple = %s", "    ", ASUTF8(name), ASUTF8(PyObject_Repr(value)))), BLUE);
+      } else if (PyDict_Check(value)) {
+        Printer(ASUTF8(PyUnicode_FromFormat("%s%s: dict = %s", "    ", ASUTF8(name), ASUTF8(PyObject_Repr(value)))), BLUE);
+      } else if (PySet_Check(value)) {
+        Printer(ASUTF8(PyUnicode_FromFormat("%s%s: set = %s", "    ", ASUTF8(name), ASUTF8(PyObject_Repr(value)))), BLUE);
       } else {
         Printer(ASUTF8(PyUnicode_FromFormat("%s%s: any = %s", "    ", ASUTF8(name), ASUTF8(PyObject_Repr(value)))), CYAN);
       }
@@ -95,7 +104,7 @@ void Print_Trace_Info(PyFrameObject *frame, PyObject *arginfo, PyObject *filenam
       Py_DECREF(value);
     }
     if (kwname != Py_None) {
-      Py_INCREF(value);
+      Py_XINCREF(value);
       value = PyDict_GetItem(locals, kwname);
       Printer(ASUTF8(PyUnicode_FromFormat("%s**%s: %s", "    ", ASUTF8(kwname), ASUTF8(PyObject_Repr(value)))), YELLOW);
       Py_DECREF(value);

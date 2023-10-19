@@ -81,8 +81,6 @@ objtracker_tracefunc(PyObject *obj, PyFrameObject *frame, int what, PyObject *ar
   PyTuple_SetItem(args, 0, (PyObject *) frame);
   Py_INCREF(frame);
 
-  PyFunctionObject *func = NULL;
-  PyCodeObject *code = NULL;
   PyObject *arg_value_info = NULL;
 
   // node = self->trackernode;
@@ -93,10 +91,9 @@ objtracker_tracefunc(PyObject *obj, PyFrameObject *frame, int what, PyObject *ar
       exit(-1);
     }
     Py_INCREF(arg_value_info);
-    if (PyObject_Repr(arg_value_info) != NULL) {
-      Print_Trace_Info(frame, arg_value_info, filename, lineno, 0);
-    } else {
-      Print_Py(arg_value_info);
+    // Print_Trace_Info(frame, arg_value_info, func_name, filename, lineno, 0);
+    if (PyObject_Repr(arg_value_info)) {
+      Print_Trace_Info(frame, arg_value_info, func_name, filename, lineno, 0);
     }
   }
 
