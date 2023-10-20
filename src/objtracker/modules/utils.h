@@ -5,7 +5,7 @@
 
 void Print_Py(PyObject *o);
 void Print_Obj(PyObject *o);
-void Print_Trace_Info(PyFrameObject *frame, PyObject *arginfo, PyObject *objname, PyObject *filename, int lineno, int log_stack);
+void Print_Trace_Info(struct ObjectNode *node);
 void Ignore_Builtin_Trace(PyObject *filename, int lineno);
 
 #endif

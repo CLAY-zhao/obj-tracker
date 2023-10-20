@@ -8,15 +8,14 @@
 #define PY_CLASS 3
 #define PY_MODULE 4
 
-PyObject* traceback_module;
-
 struct ObjectNode
 {
   struct ObjectNode *next;
-  PyObject* obj;
-  PyObject* origin;
-  int type;
-  int log_stack;
+  int lineno;
+  PyObject *filename;
+  PyObject *name;
+  PyObject *args;
+  int len;
 };
 
 typedef struct
@@ -24,8 +23,11 @@ typedef struct
   PyObject_HEAD
   int trace_total;
   int collecting;
+  int log_func_args;
   struct ObjectNode* trackernode;
-  PyObject* output_file;
+  char* output_file;
 } ObjTrackerObject;
+
+extern PyObject* traceback_module;
 
 #endif

@@ -4,7 +4,7 @@ build:
 	python setup.py build
 
 up:
-	python setup.py install -i https://pypi.tuna.tsinghua.edu.cn/simple/
+	python setup.py install
 
 install:
 	pip install . -i https://pypi.tuna.tsinghua.edu.cn/simple/

@@ -2,6 +2,7 @@
 #include <Python.h>
 #include <frameobject.h>
 
+#include "pythoncapi_compat.h"
 #include "objtracker.h"
 #include "utils.h"
 
@@ -12,7 +13,8 @@
 int objtracker_tracefunc(PyObject *obj, PyFrameObject *frame, int what, PyObject *arg);
 static PyObject* objtracker_start(ObjTrackerObject *self, PyObject *args);
 static PyObject* objtracker_stop(ObjTrackerObject *self, PyObject *args);
-static PyObject* objtracker_ftrace(ObjTrackerObject *self, PyObject *args, PyObject *kwds);
+static PyObject* objtracker_config(ObjTrackerObject *self, PyObject *args, PyObject *kwds);
+static void log_func_args(struct ObjectNode *node, PyFrameObject *frame);
 
 ObjTrackerObject* curr_tracker = NULL;
 PyObject* inspect_module = NULL;
@@ -21,13 +23,109 @@ PyObject* traceback_module = NULL;
 static PyMethodDef ObjTrakcer_methods[] = {
   {"start", (PyCFunction)objtracker_start, METH_VARARGS, "start tracker"},
   {"stop", (PyCFunction)objtracker_stop, METH_VARARGS, "stop tracker"},
-  {"ftrace", (PyCFunction)objtracker_ftrace, METH_VARARGS | METH_KEYWORDS, "trace func callable"},
+  {"config", (PyCFunction)objtracker_config, METH_VARARGS | METH_KEYWORDS, "config tracker"},
   {NULL, NULL, 0, NULL}
 };
 
 // ============================================================================
 // Python interface
 // ============================================================================
+
+static void log_func_args(struct ObjectNode *node, PyFrameObject *frame)
+{
+  PyCodeObject *code = NULL;
+  PyFrameObject *f_back = NULL;
+  PyObject *co_filename = NULL;
+  PyObject *co_name = NULL;
+  int lineno = 0;
+
+  code = PyFrame_GetCode(frame);
+  f_back = PyFrame_GetBack(frame);
+
+  co_filename = code->co_filename;
+  co_name = code->co_name;
+  lineno = frame->f_lineno;
+
+  PyObject *getargvalues_method = PyObject_GetAttrString(inspect_module, "getargvalues");
+  if (!getargvalues_method) {
+    perror("Failed to access inspect.getargvalues()");
+    exit(-1);
+  }
+  PyObject *args = PyTuple_New(1);
+  PyTuple_SetItem(args, 0, (PyObject *) frame);
+  Py_INCREF(frame);
+  PyObject *arginfo = NULL;
+  arginfo = PyObject_CallObject(getargvalues_method, args);
+  if (!arginfo) {
+    perror("Failed to call inspect.getargvalues()");
+    exit(-1);
+  }
+  Py_DECREF(args);
+  Py_DECREF(getargvalues_method);
+
+  if (!PyObject_Repr(arginfo)) {
+    return 0;
+  }
+
+  // search attr
+  PyObject *names = PyObject_GetAttrString(arginfo, "args");
+  PyObject *argname = PyObject_GetAttrString(arginfo, "varargs");
+  PyObject *kwdname = PyObject_GetAttrString(arginfo, "keywords");
+  PyObject *locals = PyObject_GetAttrString(arginfo, "locals");
+  PyObject *func_arg_dict = PyDict_New();
+  Py_ssize_t name_length = PyList_GET_SIZE(names);
+
+  int idx = 0;
+  if (!node->args) {
+    node->args = PyDict_New();
+  }
+
+  node->lineno = lineno;
+  node->filename = co_filename;
+  node->name = co_name;
+
+  while (idx < name_length) {
+    PyObject *name = PyList_GET_ITEM(names, idx);
+    PyObject *value = PyDict_GetItem(locals, name);
+    if (!value) {
+      value = PyUnicode_FromString("Not Displayable");
+      PyErr_Clear();
+    }
+    PyDict_SetItem(func_arg_dict, name, value);
+    Py_DECREF(value);
+    idx++;
+  }
+
+  if (argname != Py_None) {
+    PyObject *value = PyDict_GetItem(locals, argname);
+    if (!value) {
+      value = PyUnicode_FromString("Not Displayable");
+      PyErr_Clear();
+    }
+    PyDict_SetItemString(func_arg_dict, "*args", value);
+    Py_DECREF(value);
+    idx++;
+  }
+
+  if (kwdname != Py_None) {
+    PyObject *value = PyDict_GetItem(locals, kwdname);
+    if (!value) {
+      value = PyUnicode_FromString("Not Displayable");
+      PyErr_Clear();
+    }
+    PyDict_SetItemString(func_arg_dict, "**kwargs", value);
+    Py_DECREF(value);
+    idx++;
+  }
+
+  PyDict_SetItemString(node->args, "func_args", func_arg_dict);
+  node->len = idx;
+  Py_DECREF(func_arg_dict);
+
+exit:
+  Py_XDECREF(code);
+  Py_XDECREF(names);
+}
 
 static int
 objtracker_tracefuncdisabled(PyObject *obj, PyFrameObject *frame, int what, PyObject *arg)
@@ -56,6 +154,7 @@ objtracker_stop(ObjTrackerObject *self, PyObject *args)
 {
   if (self) {
     self->collecting = 0;
+    PyMem_FREE(self->trackernode);
   }
   curr_tracker = NULL;
   PyEval_SetTrace(NULL, NULL);
@@ -67,84 +166,66 @@ int
 objtracker_tracefunc(PyObject *obj, PyFrameObject *frame, int what, PyObject *arg)
 {
   ObjTrackerObject *self = (ObjTrackerObject *)obj;
-  PyObject *func_name = frame->f_code->co_name;
-  PyObject *filename = frame->f_code->co_filename;
-  int lineno = frame->f_lineno;
-  struct ObjectNode *node = NULL;
 
-  PyObject *getargvalues_method = PyObject_GetAttrString(inspect_module, "getargvalues");
-  if (!getargvalues_method) {
-    perror("Failed to access inspect.getargvalues()");
-    exit(-1);
+  if (!self->collecting) {
+    PyEval_SetTrace(objtracker_tracefuncdisabled, obj);
+    return 0;
   }
-  PyObject *args = PyTuple_New(1);
-  PyTuple_SetItem(args, 0, (PyObject *) frame);
-  Py_INCREF(frame);
 
-  PyObject *arg_value_info = NULL;
-
-  // node = self->trackernode;
   if (what == PyTrace_CALL) {
-    arg_value_info = PyObject_CallObject(getargvalues_method, args);
-    if (!arg_value_info) {
-      perror("Failed to call inspect.getargvalues()");
-      exit(-1);
+    int is_call = (what == PyTrace_CALL || what == PyTrace_C_CALL);
+    int is_return = (what == PyTrace_RETURN || what == PyTrace_C_RETURN || what == PyTrace_C_EXCEPTION);
+
+    if (is_call) {
+      if (!self->trackernode) {
+        self->trackernode = (struct ObjectNode *) PyMem_Calloc(1, sizeof(struct ObjectNode));
+        log_func_args(self->trackernode, frame);
+      } else {
+        struct ObjectNode *tmp = self->trackernode;
+        self->trackernode = (struct ObjectNode *) PyMem_Calloc(1, sizeof(struct ObjectNode));
+        self->trackernode->next = tmp;
+        log_func_args(self->trackernode, frame);
+      }
     }
-    Py_INCREF(arg_value_info);
-    // Print_Trace_Info(frame, arg_value_info, func_name, filename, lineno, 0);
-    if (PyObject_Repr(arg_value_info)) {
-      Print_Trace_Info(frame, arg_value_info, func_name, filename, lineno, 0);
+
+    if (self->log_func_args) {
+      if (self->trackernode->args) {
+        Print_Trace_Info(self->trackernode);
+      }
     }
   }
-
-  Py_DECREF(args);
-  Py_DECREF(getargvalues_method);
 
   return 0;
 }
 
 static PyObject *
-objtracker_ftrace(ObjTrackerObject *self, PyObject *args, PyObject *kwds)
+objtracker_config(ObjTrackerObject *self, PyObject *args, PyObject *kwds)
 {
-  static char* kwlist[] = {"callable_obj", "frame", "origin", "log_stack", NULL};
-  PyObject *kw_callable_obj = NULL;
-  PyFrameObject *frame = NULL;
-  PyObject *kw_origin = NULL;
-  int kw_log_stack = 0;
-  int type = 0;
-  if (!PyArg_ParseTupleAndKeywords(args, kwds, "O|OOi", kwlist,
-        &kw_callable_obj,
-        &frame,
-        &kw_origin,
-        &kw_log_stack)) {
-    return NULL;
-  }
-  if (PyFunction_Check(kw_callable_obj)) {
-    type = PY_FUNCTION;
-  } else if (PyMethod_Check(kw_callable_obj)) {
-    type = PY_METHOD;
-    PyMethodObject *method = (PyMethodObject *)kw_callable_obj;
-    kw_callable_obj = (PyObject *)method->im_func;
-  } else if (PyModule_Check(kw_callable_obj)) {
-    type = PY_MODULE;
-  } else {
-    type = PY_CLASS;
+  static char* kwlist[] = {"log_func_args", "output_file", 
+          NULL};
+  int kw_log_func_args = 0;
+  char* kw_output_file = NULL;
+  if (!PyArg_ParseTupleAndKeywords(args, kwds, "|is", kwlist,
+        &kw_log_func_args,
+        &kw_output_file)) {
+      return NULL;
   }
 
-  struct ObjectNode *node = (struct ObjectNode *)PyMem_Calloc(1, sizeof(struct ObjectNode));
-  node->obj = kw_callable_obj;
-  node->origin = kw_origin;
-  node->type = type;
-  node->log_stack = kw_log_stack;
-  if (self->trackernode == NULL) {
-    self->trackernode = node;
-    self->trackernode->next = NULL;
-  } else {
-    struct ObjectNode *oldnode = self->trackernode;
-    self->trackernode = node;
-    self->trackernode->next = oldnode;
+  if (kw_log_func_args >= 0) {
+    self->log_func_args = kw_log_func_args;
   }
-  PyEval_SetTrace(objtracker_tracefuncdisabled, (PyObject *)self);
+
+  if (kw_output_file) {
+    if (self->output_file) {
+      PyMem_FREE(self->output_file);
+    }
+    self->output_file = PyMem_Calloc((strlen(kw_output_file) + 1), sizeof(char));
+    if (!self->output_file) {
+      printf("Out of memory!\n");
+      exit(1);
+    }
+    strcpy(self->output_file, kw_output_file);
+  }
 
   Py_RETURN_NONE;
 }
