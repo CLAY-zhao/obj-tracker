@@ -64,10 +64,9 @@ void Print_Trace_Info(struct ObjectNode *node)
   Printer("<", CYAN);
 
   PyObject *func_args = PyDict_GetItemString(node->args, "func_args");
-  if (!func_args)
-    return NULL;
+  PyObject *keys = PyDict_Keys(func_args);
+  PyObject *iter = PyObject_GetIter(keys);
 
-  PyObject *iter = PyObject_GetIter(PyDict_Keys(func_args));
   int len = node->len;
   while (len--) {
     PyObject *name = PyIter_Next(iter);
@@ -95,6 +94,9 @@ void Print_Trace_Info(struct ObjectNode *node)
 
   Printer(">", CYAN);
   Printer("", DEFAULT);
+
+  Py_DECREF(keys);
+  Py_DECREF(iter);
 }
 
 void Print_Stack(PyFrameObject *frame)

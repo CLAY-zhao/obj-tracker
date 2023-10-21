@@ -28,6 +28,7 @@ typedef struct
   char* output_file;
 } ObjTrackerObject;
 
+extern PyObject* inspect_module;
 extern PyObject* traceback_module;
 
 #endif

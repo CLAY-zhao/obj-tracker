@@ -63,68 +63,66 @@ static void log_func_args(struct ObjectNode *node, PyFrameObject *frame)
   Py_DECREF(args);
   Py_DECREF(getargvalues_method);
 
-  if (!PyObject_Repr(arginfo)) {
-    return 0;
-  }
+  if (PyObject_Repr(arginfo)) {
+    // search attr
+    PyObject *names = PyObject_GetAttrString(arginfo, "args");
+    PyObject *argname = PyObject_GetAttrString(arginfo, "varargs");
+    PyObject *kwdname = PyObject_GetAttrString(arginfo, "keywords");
+    PyObject *locals = PyObject_GetAttrString(arginfo, "locals");
+    PyObject *func_arg_dict = PyDict_New();
+    Py_ssize_t name_length = PyList_GET_SIZE(names);
 
-  // search attr
-  PyObject *names = PyObject_GetAttrString(arginfo, "args");
-  PyObject *argname = PyObject_GetAttrString(arginfo, "varargs");
-  PyObject *kwdname = PyObject_GetAttrString(arginfo, "keywords");
-  PyObject *locals = PyObject_GetAttrString(arginfo, "locals");
-  PyObject *func_arg_dict = PyDict_New();
-  Py_ssize_t name_length = PyList_GET_SIZE(names);
-
-  int idx = 0;
-  if (!node->args) {
-    node->args = PyDict_New();
-  }
-
-  node->lineno = lineno;
-  node->filename = co_filename;
-  node->name = co_name;
-
-  while (idx < name_length) {
-    PyObject *name = PyList_GET_ITEM(names, idx);
-    PyObject *value = PyDict_GetItem(locals, name);
-    if (!value) {
-      value = PyUnicode_FromString("Not Displayable");
-      PyErr_Clear();
+    int idx = 0;
+    if (!node->args) {
+      node->args = PyDict_New();
     }
-    PyDict_SetItem(func_arg_dict, name, value);
-    Py_DECREF(value);
-    idx++;
-  }
 
-  if (argname != Py_None) {
-    PyObject *value = PyDict_GetItem(locals, argname);
-    if (!value) {
-      value = PyUnicode_FromString("Not Displayable");
-      PyErr_Clear();
+    node->lineno = lineno;
+    node->filename = co_filename;
+    node->name = co_name;
+
+    while (idx < name_length) {
+      PyObject *name = PyList_GET_ITEM(names, idx);
+      PyObject *value = PyDict_GetItem(locals, name);
+      if (!value) {
+        value = PyUnicode_FromString("Not Displayable");
+        PyErr_Clear();
+      }
+      PyDict_SetItem(func_arg_dict, name, value);
+      Py_DECREF(value);
+      idx++;
     }
-    PyDict_SetItemString(func_arg_dict, "*args", value);
-    Py_DECREF(value);
-    idx++;
-  }
 
-  if (kwdname != Py_None) {
-    PyObject *value = PyDict_GetItem(locals, kwdname);
-    if (!value) {
-      value = PyUnicode_FromString("Not Displayable");
-      PyErr_Clear();
+    if (argname != Py_None) {
+      PyObject *value = PyDict_GetItem(locals, argname);
+      if (!value) {
+        value = PyUnicode_FromString("Not Displayable");
+        PyErr_Clear();
+      }
+      PyDict_SetItemString(func_arg_dict, "*args", value);
+      Py_DECREF(value);
+      idx++;
     }
-    PyDict_SetItemString(func_arg_dict, "**kwargs", value);
-    Py_DECREF(value);
-    idx++;
+
+    if (kwdname != Py_None) {
+      PyObject *value = PyDict_GetItem(locals, kwdname);
+      if (!value) {
+        value = PyUnicode_FromString("Not Displayable");
+        PyErr_Clear();
+      }
+      PyDict_SetItemString(func_arg_dict, "**kwargs", value);
+      Py_DECREF(value);
+      idx++;
+    }
+
+    PyDict_SetItemString(node->args, "func_args", func_arg_dict);
+    node->len = idx;
+    Py_DECREF(func_arg_dict);
+
+    Py_XDECREF(code);
+    Py_XDECREF(names);
   }
 
-  PyDict_SetItemString(node->args, "func_args", func_arg_dict);
-  node->len = idx;
-  Py_DECREF(func_arg_dict);
-
-exit:
-  Py_XDECREF(code);
-  Py_XDECREF(names);
 }
 
 static int
