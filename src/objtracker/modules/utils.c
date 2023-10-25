@@ -64,39 +64,32 @@ void Print_Trace_Info(struct ObjectNode *node)
   Printer("<", CYAN);
 
   PyObject *func_args = PyDict_GetItemString(node->args, "func_args");
-  PyObject *keys = PyDict_Keys(func_args);
-  PyObject *iter = PyObject_GetIter(keys);
 
-  int len = node->len;
-  while (len--) {
-    PyObject *name = PyIter_Next(iter);
-    PyObject *value = PyDict_GetItem(func_args, name);
+  Py_ssize_t pos = 0;
+  PyObject *key = NULL;
+  PyObject *value = NULL;
+  while (PyDict_Next(func_args, &pos, &key, &value)) {
     if (PyLong_Check(value)) {
-      Printer(ASUTF8(PyUnicode_FromFormat("%s%s: int = %s", "    ", ASUTF8(name), PyAsUTF8(value))), WHITE);
+      Printer(ASUTF8(PyUnicode_FromFormat("%s%s: int = %s", "    ", ASUTF8(key), PyAsUTF8(value))), WHITE);
     } else if (PyFloat_Check(value)) {
-      Printer(ASUTF8(PyUnicode_FromFormat("%s%s: float = %s", "    ", ASUTF8(name), PyAsUTF8(value))), WHITE);
+      Printer(ASUTF8(PyUnicode_FromFormat("%s%s: float = %s", "    ", ASUTF8(key), PyAsUTF8(value))), WHITE);
     } else if (PyUnicode_Check(value)) {
-      Printer(ASUTF8(PyUnicode_FromFormat("%s%s: str = %s", "    ", ASUTF8(name), PyAsUTF8(value))), WHITE);
+      Printer(ASUTF8(PyUnicode_FromFormat("%s%s: str = %s", "    ", ASUTF8(key), PyAsUTF8(value))), WHITE);
     } else if (PyList_Check(value)) {
-      Printer(ASUTF8(PyUnicode_FromFormat("%s%s: list = %s", "    ", ASUTF8(name), PyAsUTF8(value))), BLUE);
+      Printer(ASUTF8(PyUnicode_FromFormat("%s%s: list = %s", "    ", ASUTF8(key), PyAsUTF8(value))), BLUE);
     } else if (PyTuple_Check(value)) {
-      Printer(ASUTF8(PyUnicode_FromFormat("%s%s: tuple = %s", "    ", ASUTF8(name), PyAsUTF8(value))), BLUE);
+      Printer(ASUTF8(PyUnicode_FromFormat("%s%s: tuple = %s", "    ", ASUTF8(key), PyAsUTF8(value))), BLUE);
     } else if (PyDict_Check(value)) {
-      Printer(ASUTF8(PyUnicode_FromFormat("%s%s: dict = %s", "    ", ASUTF8(name), PyAsUTF8(value))), BLUE);
+      Printer(ASUTF8(PyUnicode_FromFormat("%s%s: dict = %s", "    ", ASUTF8(key), PyAsUTF8(value))), BLUE);
     } else if (PySet_Check(value)) {
-      Printer(ASUTF8(PyUnicode_FromFormat("%s%s: set = %s", "    ", ASUTF8(name), PyAsUTF8(value))), BLUE);
+      Printer(ASUTF8(PyUnicode_FromFormat("%s%s: set = %s", "    ", ASUTF8(key), PyAsUTF8(value))), BLUE);
     } else {
-      Printer(ASUTF8(PyUnicode_FromFormat("%s%s: %s = %s", "    ", ASUTF8(name), PyAsUTF8(PyObject_Type(value)), ASUTF8(PyObject_Repr(value)))), MAGENTA);
+      Printer(ASUTF8(PyUnicode_FromFormat("%s%s: %s = %s", "    ", ASUTF8(key), PyAsUTF8(PyObject_Type(value)), ASUTF8(PyObject_Repr(value)))), MAGENTA);
     }
-    Py_DECREF(name);
-    Py_XDECREF(value);
   }
 
   Printer(">", CYAN);
   Printer("", DEFAULT);
-
-  Py_DECREF(keys);
-  Py_DECREF(iter);
 }
 
 void Print_Stack(PyFrameObject *frame)

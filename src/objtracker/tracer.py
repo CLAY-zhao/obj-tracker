@@ -9,7 +9,7 @@ class _Tracker(object):
   
   def __init__(
       self,
-      log_func_args: int = 1,
+      log_func_args: bool = False,
       output_file: Optional[str] = None
     ) -> None:
     self.initialized = False
@@ -25,16 +25,11 @@ class _Tracker(object):
     return self.__log_func_args
   
   @log_func_args.setter
-  def log_func_args(self, log_func_args: Union[str, int]) -> None:
-    if isinstance(log_func_args, str):
-      try:
-        self.__log_func_args = int(log_func_args)
-      except ValueError:
-        raise ValueError(f"Error when trying to convert log_func_args {log_func_args} to integer.")
-    elif isinstance(log_func_args, int):
+  def log_func_args(self, log_func_args: bool) -> None:
+    if isinstance(log_func_args, bool):
       self.__log_func_args = log_func_args
     else:
-      raise ValueError(f"Error when trying to convert log_func_args {log_func_args} to integer.")
+      raise ValueError(f"log_func_args needs to be True or False, not {log_func_args}")
     self.config()
   
   @property
@@ -71,3 +66,6 @@ class _Tracker(object):
   def stop(self) -> None:
     self.enable = False
     self._objtracker.stop()
+    
+  def dump(self, filename: str) -> None:
+    self._objtracker.dump(filename)

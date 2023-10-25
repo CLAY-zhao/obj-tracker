@@ -1,7 +1,13 @@
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 #include <frameobject.h>
-
+#if _WIN32
+#include <windows.h>
+#elif __APPLE
+#include <pthread.h>
+#else
+#include <pthread.h>
+#endif
 #include "pythoncapi_compat.h"
 #include "objtracker.h"
 #include "utils.h"
@@ -14,16 +20,27 @@ int objtracker_tracefunc(PyObject *obj, PyFrameObject *frame, int what, PyObject
 static PyObject* objtracker_start(ObjTrackerObject *self, PyObject *args);
 static PyObject* objtracker_stop(ObjTrackerObject *self, PyObject *args);
 static PyObject* objtracker_config(ObjTrackerObject *self, PyObject *args, PyObject *kwds);
+static PyObject* objtracker_dump(ObjTrackerObject *self, PyObject *args);
 static void log_func_args(struct ObjectNode *node, PyFrameObject *frame);
 
 ObjTrackerObject* curr_tracker = NULL;
 PyObject* inspect_module = NULL;
 PyObject* traceback_module = NULL;
+PyObject* multiprocessing_module = NULL;
+
+#ifdef Py_NOGIL
+#define OBJTRACKER_THREAD_PROTECT_START(self) Py_BEGIN_CRITICAL_SECTION(&self->mutex)
+#define OBJTRACKER_THREAD_PROTECT_END(self) Py_END_CRITICAL_SECTION
+#else
+#define OBJTRACKER_THREAD_PROTECT_START(self)
+#define OBJTRACKER_THREAD_PROTECT_END(self)
+#endif
 
 static PyMethodDef ObjTrakcer_methods[] = {
   {"start", (PyCFunction)objtracker_start, METH_VARARGS, "start tracker"},
   {"stop", (PyCFunction)objtracker_stop, METH_VARARGS, "stop tracker"},
   {"config", (PyCFunction)objtracker_config, METH_VARARGS | METH_KEYWORDS, "config tracker"},
+  {"dump", (PyCFunction)objtracker_dump, METH_VARARGS, "dump tracker"},
   {NULL, NULL, 0, NULL}
 };
 
@@ -152,7 +169,7 @@ objtracker_stop(ObjTrackerObject *self, PyObject *args)
 {
   if (self) {
     self->collecting = 0;
-    PyMem_FREE(self->trackernode);
+    // PyMem_FREE(self->trackernode);
   }
   curr_tracker = NULL;
   PyEval_SetTrace(NULL, NULL);
@@ -196,7 +213,7 @@ objtracker_tracefunc(PyObject *obj, PyFrameObject *frame, int what, PyObject *ar
   return 0;
 }
 
-static PyObject *
+static PyObject*
 objtracker_config(ObjTrackerObject *self, PyObject *args, PyObject *kwds)
 {
   static char* kwlist[] = {"log_func_args", "output_file", 
@@ -228,6 +245,100 @@ objtracker_config(ObjTrackerObject *self, PyObject *args, PyObject *kwds)
   Py_RETURN_NONE;
 }
 
+static PyObject*
+objtracker_dump(ObjTrackerObject *self, PyObject *args)
+{
+  const char* filename = NULL;
+  FILE* fptr = NULL;
+  if (!PyArg_ParseTuple(args, "s", &filename)) {
+    PyErr_SetString(PyExc_ValueError, "Missing required file name");
+    Py_RETURN_NONE;
+  }
+  fptr = fopen(filename, "w");
+  if (!fptr) {
+    PyErr_Format(PyExc_ValueError, "Cant't open file %s to write", filename);
+    Py_RETURN_NONE;
+  }
+
+  fprintf(fptr, "{\"traceEvents\": [");
+
+  OBJTRACKER_THREAD_PROTECT_START(self);
+  struct ObjectNode *node = self->trackernode;
+  unsigned long pid = 0;
+
+  if (self->fix_pid > 0) {
+    pid = self->fix_pid;
+  } else {
+#if _WIN32
+    pid = GetCurrentProcessId();
+#else
+    pid = getpid();
+#endif
+  }
+
+  // Process Name
+  {
+    PyObject* current_process_method = PyObject_GetAttrString(multiprocessing_module, "current_process");
+    if (!current_process_method) {
+      perror("Failed to access multiprocessing.current_process()");
+      exit(-1);
+    }
+    PyObject* current_process = PyObject_CallObject(current_process_method, NULL);
+    if (!current_process) {
+      perror("Failed to access multiprocessing.current_process()");
+      exit(-1);
+    }
+    PyObject* process_name = PyObject_GetAttrString(current_process, "name");
+
+    Py_DECREF(current_process_method);
+    Py_DECREF(current_process);
+    fprintf(fptr, "{\"ph\":\"M\",\"pid\":%lu,\"tid\":%lu,\"name\":\"process_name\",\"args\":{\"name\":\"%s\"}},",
+            pid, pid, PyUnicode_AsUTF8(process_name));
+    Py_DECREF(process_name);
+  }
+
+  PyObject *key = NULL;
+  PyObject *value = NULL;
+  while (node) {
+    fprintf(
+      // fptr, "{\"args\":{\"name\":\"trace\"},\"ph\":\"M\",\"pid\":1,\"tid\":1,\"name\":\"thread_name\",\"filename\":\"%s\",\"call\":\"%s\",\"lineno\":%lu,\"vars\":[",
+      fptr, "{\"ph\":\"X\",\"pid\":1,\"tid\":1,\"name\":\"%s\",\"filename\":\"%s\",\"call\":\"%s\",\"lineno\":%lu},",
+      PyUnicode_AsUTF8(node->name),
+      PyUnicode_AsUTF8(node->filename),
+      PyUnicode_AsUTF8(node->name),
+      node->lineno
+    );
+
+    // PyObject *args = PyDict_GetItemString(node->args, "func_args");
+
+    // if (args) {
+    //   Py_ssize_t pos = 0;
+    //   Py_ssize_t size = PyDict_Size(args);
+    //   while (PyDict_Next(args, &pos, &key, &value)) {
+    //     if (pos != size) {
+    //       fprintf(fptr, "{\"name\": \"%s\", \"type\": \"%s\", \"value\": \"%s\"},",
+    //               PyUnicode_AsUTF8(key), 
+    //               PyUnicode_AsUTF8(PyObject_Repr(PyObject_Type(value))),
+    //               PyUnicode_AsUTF8(PyObject_Repr(value)));
+    //     } else {
+    //       fprintf(fptr, "{\"name\": \"%s\", \"type\": \"%s\", \"value\": \"%s\"}",
+    //               PyUnicode_AsUTF8(key), 
+    //               PyUnicode_AsUTF8(PyObject_Repr(PyObject_Type(value))),
+    //               PyUnicode_AsUTF8(PyObject_Repr(value)));
+    //     }
+    //   }
+    // }
+    // fprintf(fptr, "]},");
+    node = node->next;
+  }
+
+  fseek(fptr, -1, SEEK_CUR);
+  fprintf(fptr, "]}");
+  fclose(fptr);
+  OBJTRACKER_THREAD_PROTECT_END(self);
+  Py_RETURN_NONE;
+}
+
 // ============================================================================
 // CodeTracer stuff
 // ============================================================================
@@ -238,6 +349,7 @@ ObjTracker_New(PyTypeObject *type, PyObject *args, PyObject *kwargs)
   ObjTrackerObject *self = (ObjTrackerObject *)type->tp_alloc(type, 0);
   self->trace_total = 0;
   self->collecting = 0;
+  self->fix_pid = 0;
   self->output_file = NULL;
   self->trackernode = NULL;
   return (PyObject *)self;
@@ -285,6 +397,7 @@ PyInit_tracker(void)
 
   inspect_module = PyImport_ImportModule("inspect");
   traceback_module = PyImport_ImportModule("traceback");
+  multiprocessing_module = PyImport_ImportModule("multiprocessing");
 
   return m;
 }

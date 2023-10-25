@@ -2,6 +2,11 @@
 #define __OBJTRACKER_H__
 
 #include <Python.h>
+#if _WIN32
+#include <windows.h>
+#else
+#include <pthread.h>
+#endif
 
 #define PY_FUNCTION 1
 #define PY_METHOD 2
@@ -23,9 +28,13 @@ typedef struct
   PyObject_HEAD
   int trace_total;
   int collecting;
+  long fix_pid;
   int log_func_args;
   struct ObjectNode* trackernode;
   char* output_file;
+#ifdef Py_NOGIL
+  PyMutex mutex;
+#endif
 } ObjTrackerObject;
 
 extern PyObject* inspect_module;
