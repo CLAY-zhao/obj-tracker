@@ -1,6 +1,7 @@
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 #include <frameobject.h>
+#include <time.h>
 #if _WIN32
 #include <windows.h>
 #elif __APPLE
@@ -21,12 +22,18 @@ static PyObject* objtracker_start(ObjTrackerObject *self, PyObject *args);
 static PyObject* objtracker_stop(ObjTrackerObject *self, PyObject *args);
 static PyObject* objtracker_config(ObjTrackerObject *self, PyObject *args, PyObject *kwds);
 static PyObject* objtracker_dump(ObjTrackerObject *self, PyObject *args);
+static PyObject* objtracker_createthreadinfo(ObjTrackerObject *self);
 static void log_func_args(struct ObjectNode *node, PyFrameObject *frame);
 
 ObjTrackerObject* curr_tracker = NULL;
 PyObject* inspect_module = NULL;
 PyObject* traceback_module = NULL;
+PyObject* thread_module = NULL;
 PyObject* multiprocessing_module = NULL;
+
+#if _WIN32
+LARGE_INTEGER qpc_freq;
+#endif
 
 #ifdef Py_NOGIL
 #define OBJTRACKER_THREAD_PROTECT_START(self) Py_BEGIN_CRITICAL_SECTION(&self->mutex)
@@ -47,6 +54,16 @@ static PyMethodDef ObjTrakcer_methods[] = {
 // ============================================================================
 // Python interface
 // ============================================================================
+
+static double get_ts(struct ObjectNode *node)
+{
+  double current_ts = get_system_ts();
+  if (current_ts <= node->prev_ts) {
+    current_ts = node->prev_ts + 20;
+  }
+  node->prev_ts = current_ts;
+  return current_ts;
+}
 
 static void log_func_args(struct ObjectNode *node, PyFrameObject *frame)
 {
@@ -201,12 +218,19 @@ objtracker_tracefunc(PyObject *obj, PyFrameObject *frame, int what, PyObject *ar
         self->trackernode->next = tmp;
         log_func_args(self->trackernode, frame);
       }
+      self->trackernode->ts = get_ts(self->trackernode);
+      objtracker_createthreadinfo(self);
     }
 
     if (self->log_func_args) {
       if (self->trackernode->args) {
         Print_Trace_Info(self->trackernode);
       }
+    }
+  } else if (what == PyTrace_RETURN) {
+    if (self->trackernode) {
+      double dur = get_ts(self->trackernode) - self->trackernode->ts;
+      self->trackernode->dur = dur;
     }
   }
 
@@ -265,6 +289,7 @@ objtracker_dump(ObjTrackerObject *self, PyObject *args)
   OBJTRACKER_THREAD_PROTECT_START(self);
   struct ObjectNode *node = self->trackernode;
   unsigned long pid = 0;
+  struct MetadataNode* metadata = NULL;
 
   if (self->fix_pid > 0) {
     pid = self->fix_pid;
@@ -297,38 +322,57 @@ objtracker_dump(ObjTrackerObject *self, PyObject *args)
     Py_DECREF(process_name);
   }
 
+  // Thread Name
+  metadata = self->metadata;
+  while (metadata) {
+    fprintf(fptr, "{\"ph\":\"M\",\"pid\":%lu,\"tid\":%lu,\"name\":\"thread_name\",\"args\":{\"name\":\"",
+            pid, metadata->tid);
+    fprintf(fptr, "\"}},");
+    metadata = metadata->next;
+  }
+
   PyObject *key = NULL;
   PyObject *value = NULL;
   while (node) {
+    if (!node->filename) {
+      node = node->next;
+      continue;
+    }
+    long long ts_long = node->ts;
+    long long dur_long = node->dur;
     fprintf(
-      // fptr, "{\"args\":{\"name\":\"trace\"},\"ph\":\"M\",\"pid\":1,\"tid\":1,\"name\":\"thread_name\",\"filename\":\"%s\",\"call\":\"%s\",\"lineno\":%lu,\"vars\":[",
-      fptr, "{\"ph\":\"X\",\"pid\":1,\"tid\":1,\"name\":\"%s\",\"filename\":\"%s\",\"call\":\"%s\",\"lineno\":%lu},",
+      fptr, "{\"ph\":\"X\",\"pid\":%lu,\"tid\":%lu,\"ts\":%lld.%03lld,\"dur\":%lld.%03lld,\"name\":\"%s\",\"filename\":\"%s\",\"call\":\"%s\",\"lineno\":%lu,\"args\":{\"vars\":[",
+      pid,
+      node->tid,
+      ts_long / 1000,
+      ts_long % 1000,
+      dur_long / 1000,
+      dur_long % 1000,
       PyUnicode_AsUTF8(node->name),
       PyUnicode_AsUTF8(node->filename),
       PyUnicode_AsUTF8(node->name),
       node->lineno
     );
 
-    // PyObject *args = PyDict_GetItemString(node->args, "func_args");
-
-    // if (args) {
-    //   Py_ssize_t pos = 0;
-    //   Py_ssize_t size = PyDict_Size(args);
-    //   while (PyDict_Next(args, &pos, &key, &value)) {
-    //     if (pos != size) {
-    //       fprintf(fptr, "{\"name\": \"%s\", \"type\": \"%s\", \"value\": \"%s\"},",
-    //               PyUnicode_AsUTF8(key), 
-    //               PyUnicode_AsUTF8(PyObject_Repr(PyObject_Type(value))),
-    //               PyUnicode_AsUTF8(PyObject_Repr(value)));
-    //     } else {
-    //       fprintf(fptr, "{\"name\": \"%s\", \"type\": \"%s\", \"value\": \"%s\"}",
-    //               PyUnicode_AsUTF8(key), 
-    //               PyUnicode_AsUTF8(PyObject_Repr(PyObject_Type(value))),
-    //               PyUnicode_AsUTF8(PyObject_Repr(value)));
-    //     }
-    //   }
-    // }
-    // fprintf(fptr, "]},");
+    PyObject *args = PyDict_GetItemString(node->args, "func_args");
+    if (args) {
+      Py_ssize_t pos = 0;
+      Py_ssize_t size = PyDict_Size(args);
+      while (PyDict_Next(args, &pos, &key, &value)) {
+        if (pos != size) {
+          fprintf(fptr, "{\"name\": \"%s\", \"type\": \"%s\", \"value\": \"%s\"},",
+                  PyUnicode_AsUTF8(key), 
+                  PyUnicode_AsUTF8(PyObject_Repr(PyObject_Type(value))),
+                  PyUnicode_AsUTF8(PyObject_Repr(value)));
+        } else {
+          fprintf(fptr, "{\"name\": \"%s\", \"type\": \"%s\", \"value\": \"%s\"}",
+                  PyUnicode_AsUTF8(key), 
+                  PyUnicode_AsUTF8(PyObject_Repr(PyObject_Type(value))),
+                  PyUnicode_AsUTF8(PyObject_Repr(value)));
+        }
+      }
+    }
+    fprintf(fptr, "]}},");
     node = node->next;
   }
 
@@ -336,6 +380,76 @@ objtracker_dump(ObjTrackerObject *self, PyObject *args)
   fprintf(fptr, "]}");
   fclose(fptr);
   OBJTRACKER_THREAD_PROTECT_END(self);
+  Py_RETURN_NONE;
+}
+
+static PyObject*
+objtracker_createthreadinfo(ObjTrackerObject *self)
+{
+  unsigned long tid = 0;
+#if _WIN32
+  tid = GetCurrentThreadId();
+#elif __APPLE__
+  __uint64_t atid = 0;
+  if (pthread_threadid_np(NULL, &atid)) {
+    tid = (unsigned long)pthread_self();
+  } else {
+    tid = atid;
+  }
+#else
+  tid = syscall(SYS_gettid);
+#endif
+
+  PyGILState_STATE state = PyGILState_Ensure();
+  OBJTRACKER_THREAD_PROTECT_START(self);
+
+  PyObject* current_thread_method = PyObject_GetAttrString(thread_module, "current_thread");
+  if (!current_thread_method) {
+    perror("Failed to access threading.current_thread()");
+    exit(-1);
+  }
+  PyObject* current_thread = PyObject_CallObject(current_thread_method, NULL);
+  if (!current_thread) {
+    perror("Failed to access threading.current_thread()");
+    exit(-1);
+  }
+  PyObject* thread_name = PyObject_GetAttrString(current_thread, "name");
+
+  Py_DECREF(current_thread_method);
+  Py_DECREF(current_thread);
+
+  struct MetadataNode* node = self->metadata;
+  int found_node = 0;
+
+  while (node) {
+    if (node->tid == tid) {
+      Py_DECREF(node->name);
+      node->name = thread_name;
+      found_node = 1;
+      break;
+    }
+    node = node->next;
+  }
+
+  if (!found_node) {
+    node = (struct MetadataNode*) PyMem_Calloc(1, sizeof(struct MetadataNode));
+    if (!node) {
+      perror("Out of memory!");
+      exit(-1);
+    }
+    node->name = thread_name;
+    node->tid = tid;
+    node->next = self->metadata;
+    self->metadata = node;
+  }
+
+  if (self->trackernode) {
+    self->trackernode->tid = tid;
+    self->trackernode->prev_ts = 0.0;
+  }
+
+  OBJTRACKER_THREAD_PROTECT_END(self);
+  PyGILState_Release(state);
   Py_RETURN_NONE;
 }
 
@@ -347,11 +461,17 @@ static PyObject *
 ObjTracker_New(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 {
   ObjTrackerObject *self = (ObjTrackerObject *)type->tp_alloc(type, 0);
-  self->trace_total = 0;
-  self->collecting = 0;
-  self->fix_pid = 0;
-  self->output_file = NULL;
-  self->trackernode = NULL;
+  if (self) {
+    QueryPerformanceCounter(&qpc_freq);
+    self->trace_total = 0;
+    self->collecting = 0;
+    self->fix_pid = 0;
+    self->output_file = NULL;
+    self->trackernode = NULL;
+    self->metadata = NULL;
+    objtracker_createthreadinfo(self);
+  }
+
   return (PyObject *)self;
 }
 
@@ -397,6 +517,7 @@ PyInit_tracker(void)
 
   inspect_module = PyImport_ImportModule("inspect");
   traceback_module = PyImport_ImportModule("traceback");
+  thread_module = PyImport_ImportModule("threading");
   multiprocessing_module = PyImport_ImportModule("multiprocessing");
 
   return m;

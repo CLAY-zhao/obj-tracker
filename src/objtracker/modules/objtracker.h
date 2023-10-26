@@ -20,7 +20,17 @@ struct ObjectNode
   PyObject *filename;
   PyObject *name;
   PyObject *args;
+  unsigned long tid;
+  double ts;
+  double prev_ts;
+  double dur;
   int len;
+};
+
+struct MetadataNode {
+  unsigned long tid;
+  PyObject *name;
+  struct MetadataNode *next;
 };
 
 typedef struct
@@ -35,6 +45,7 @@ typedef struct
 #ifdef Py_NOGIL
   PyMutex mutex;
 #endif
+  struct MetadataNode* metadata;
 } ObjTrackerObject;
 
 extern PyObject* inspect_module;
