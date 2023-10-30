@@ -58,7 +58,6 @@ static PyMethodDef ObjTrakcer_methods[] = {
 static double get_ts(struct ObjectNode *node)
 {
   double current_ts = get_system_ts();
-  printf("time: %d\n", current_ts);
   if (current_ts <= node->prev_ts) {
     current_ts = node->prev_ts + 20;
   }
@@ -348,7 +347,7 @@ objtracker_dump(ObjTrackerObject *self, PyObject *args)
       node = node->next;
       continue;
     }
-    long long ts_long = node->ts;
+    long long ts_long = (long long) node->ts;
     long long dur_long = node->dur;
     fprintf(
       fptr, "{\"pid\":%lu,\"tid\":%lu,\"ts\":%lld.%03lld,\"ph\":\"X\",\"dur\":%lld.%03lld,\"cat\":\"fee\",\"name\":\"%s (%s)\",\"args\":{\"vars\":[",
