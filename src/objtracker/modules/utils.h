@@ -25,7 +25,7 @@ inline double get_system_ts(void)
 #else
   struct timespec t;
   clock_gettime(CLOCK_MONOTONIC, &t);
-  return ((double)t.tv_sec * 1e9 + tv_nsec);
+  return ((double)t.tv_sec * 1e9 + t.tv_nsec);
 #endif
 }
 

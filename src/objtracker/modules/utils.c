@@ -83,6 +83,8 @@ void Print_Trace_Info(struct ObjectNode *node)
       Printer(ASUTF8(PyUnicode_FromFormat("%s%s: dict = %s", "    ", ASUTF8(key), PyAsUTF8(value))), BLUE);
     } else if (PySet_Check(value)) {
       Printer(ASUTF8(PyUnicode_FromFormat("%s%s: set = %s", "    ", ASUTF8(key), PyAsUTF8(value))), BLUE);
+    } else if (PyBytes_Check(value)) {
+      Printer(ASUTF8(PyUnicode_FromFormat("%s%s: bytes = ...", "    ", ASUTF8(key))), BLUE);
     } else {
       Printer(ASUTF8(PyUnicode_FromFormat("%s%s: %s = %s", "    ", ASUTF8(key), PyAsUTF8(PyObject_Type(value)), ASUTF8(PyObject_Repr(value)))), MAGENTA);
     }

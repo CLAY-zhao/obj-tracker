@@ -58,6 +58,7 @@ static PyMethodDef ObjTrakcer_methods[] = {
 static double get_ts(struct ObjectNode *node)
 {
   double current_ts = get_system_ts();
+  printf("time: %d\n", current_ts);
   if (current_ts <= node->prev_ts) {
     current_ts = node->prev_ts + 20;
   }
@@ -122,32 +123,40 @@ static void log_func_args(struct ObjectNode *node, PyFrameObject *frame)
         value = PyUnicode_FromString("Not Displayable");
         PyErr_Clear();
       }
-      PyDict_SetItem(func_arg_dict, name, value);
+      if (PyObject_Size(value) > 20) {
+        PyDict_SetItem(func_arg_dict, name, PyUnicode_FromString("too long..."));
+      } else if (PyBytes_Check(value)) {
+        PyDict_SetItem(func_arg_dict, name, PyUnicode_FromString("too long.."));
+      } else if (PyCode_Check(value)) {
+        PyDict_SetItem(func_arg_dict, name, PyUnicode_FromString("too long..."));
+      } else {
+        PyDict_SetItem(func_arg_dict, name, value);
+      }
       Py_DECREF(value);
       idx++;
     }
 
-    if (argname != Py_None) {
-      PyObject *value = PyDict_GetItem(locals, argname);
-      if (!value) {
-        value = PyUnicode_FromString("Not Displayable");
-        PyErr_Clear();
-      }
-      PyDict_SetItemString(func_arg_dict, "*args", value);
-      Py_DECREF(value);
-      idx++;
-    }
+    // if (argname != Py_None) {
+    //   PyObject *value = PyDict_GetItem(locals, argname);
+    //   if (!value) {
+    //     value = PyUnicode_FromString("Not Displayable");
+    //     PyErr_Clear();
+    //   }
+    //   PyDict_SetItemString(func_arg_dict, "*args", value);
+    //   Py_DECREF(value);
+    //   idx++;
+    // }
 
-    if (kwdname != Py_None) {
-      PyObject *value = PyDict_GetItem(locals, kwdname);
-      if (!value) {
-        value = PyUnicode_FromString("Not Displayable");
-        PyErr_Clear();
-      }
-      PyDict_SetItemString(func_arg_dict, "**kwargs", value);
-      Py_DECREF(value);
-      idx++;
-    }
+    // if (kwdname != Py_None) {
+    //   PyObject *value = PyDict_GetItem(locals, kwdname);
+    //   if (!value) {
+    //     value = PyUnicode_FromString("Not Displayable");
+    //     PyErr_Clear();
+    //   }
+    //   PyDict_SetItemString(func_arg_dict, "**kwargs", value);
+    //   Py_DECREF(value);
+    //   idx++;
+    // }
 
     PyDict_SetItemString(node->args, "func_args", func_arg_dict);
     node->len = idx;
@@ -198,6 +207,7 @@ int
 objtracker_tracefunc(PyObject *obj, PyFrameObject *frame, int what, PyObject *arg)
 {
   ObjTrackerObject *self = (ObjTrackerObject *)obj;
+  frame->f_trace_opcodes = 1;
 
   if (!self->collecting) {
     PyEval_SetTrace(objtracker_tracefuncdisabled, obj);
@@ -341,7 +351,7 @@ objtracker_dump(ObjTrackerObject *self, PyObject *args)
     long long ts_long = node->ts;
     long long dur_long = node->dur;
     fprintf(
-      fptr, "{\"ph\":\"X\",\"pid\":%lu,\"tid\":%lu,\"ts\":%lld.%03lld,\"dur\":%lld.%03lld,\"name\":\"%s\",\"filename\":\"%s\",\"call\":\"%s\",\"lineno\":%lu,\"args\":{\"vars\":[",
+      fptr, "{\"pid\":%lu,\"tid\":%lu,\"ts\":%lld.%03lld,\"ph\":\"X\",\"dur\":%lld.%03lld,\"cat\":\"fee\",\"name\":\"%s (%s)\",\"args\":{\"vars\":[",
       pid,
       node->tid,
       ts_long / 1000,
@@ -349,9 +359,7 @@ objtracker_dump(ObjTrackerObject *self, PyObject *args)
       dur_long / 1000,
       dur_long % 1000,
       PyUnicode_AsUTF8(node->name),
-      PyUnicode_AsUTF8(node->filename),
-      PyUnicode_AsUTF8(node->name),
-      node->lineno
+      PyUnicode_AsUTF8(node->filename)
     );
 
     PyObject *args = PyDict_GetItemString(node->args, "func_args");
@@ -372,7 +380,7 @@ objtracker_dump(ObjTrackerObject *self, PyObject *args)
         }
       }
     }
-    fprintf(fptr, "]}},");
+    fprintf(fptr, "], \"lineno\": %lu}},", node->lineno);
     node = node->next;
   }
 
