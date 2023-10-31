@@ -1,6 +1,6 @@
 import json
 import os
-from typing import Optional
+from typing import Optional, Union, Callable, List, Tuple
 
 from .utils import replace_backslashes
 from .color_util import COLOR
@@ -72,3 +72,37 @@ class Tracker(_Tracker):
       
     if enabled:
       self.start()
+  
+  def add_hook(
+      self, callback: Optional[Callable] = None,
+      when_type_trigger: Union[Tuple, List] = None,
+      when_value_trigger: Union[Tuple, List] = None,
+      alias: str = None
+  ):
+    if callback is None:
+      return self
+    
+    if alias is None:
+      try:
+        if not hasattr(callback, "__class__"):
+          alias = callback.__name__
+        else:
+          alias = callback.__class__.__name__
+      except AttributeError:
+        alias = repr(callback)
+
+    if when_type_trigger is not None:
+      if not isinstance(when_type_trigger, (list, tuple)):
+        return self
+    
+    if when_value_trigger is not None:
+      if not isinstance(when_value_trigger, (list, tuple)):
+        return self
+    
+    self.trace_hook(
+      callback=callback,
+      alias=alias,
+      when_type_trigger=when_type_trigger,
+      when_value_trigger=when_value_trigger
+    )
+    return self

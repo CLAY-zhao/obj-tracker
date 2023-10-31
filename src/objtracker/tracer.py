@@ -1,4 +1,4 @@
-from typing import Optional, Union
+from typing import Optional, Union, Callable, List, Tuple
 
 import objtracker.tracker as objtracker
 
@@ -69,3 +69,16 @@ class _Tracker(object):
     
   def dump(self, filename: str) -> None:
     self._objtracker.dump(filename)
+
+  def trace_hook(
+      self, callback: Optional[Callable] = None, alias: str = None,
+      when_type_trigger: Union[Tuple, List] = None,
+      when_value_trigger: Union[Tuple, List] = None
+    ):
+    self._objtracker.add_trace_hook(
+      callback=callback,
+      alias=alias,
+      when_type_trigger=when_type_trigger,
+      when_value_trigger=when_value_trigger
+    )
+    print("ok")

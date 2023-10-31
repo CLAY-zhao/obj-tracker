@@ -33,6 +33,14 @@ struct MetadataNode {
   struct MetadataNode *next;
 };
 
+struct TraceInfoCallback {
+  PyObject* callback;
+  char* alias;
+  PyObject* when_type_trigger;
+  PyObject* when_value_trigger;
+  struct TraceInfoCallback *next;
+};
+
 typedef struct
 {
   PyObject_HEAD
@@ -41,6 +49,7 @@ typedef struct
   long fix_pid;
   int log_func_args;
   struct ObjectNode* trackernode;
+  struct TraceInfoCallback* tracecallback;
   char* output_file;
 #ifdef Py_NOGIL
   PyMutex mutex;
