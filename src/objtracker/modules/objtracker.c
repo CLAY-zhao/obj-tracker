@@ -72,7 +72,34 @@ static void trigger_trace_hook(ObjTrackerObject *self)
 {
   struct TraceInfoCallback *tracehook = self->tracecallback;
   PyObject* result = NULL;
+  PyObject* value = NULL;
+  Py_ssize_t pos = 0;
+  PyObject* func_args = PyDict_GetItemString(self->trackernode->args, "func_args");
+  int suppore = 0;
   while (tracehook) {
+    if (tracehook->when_type_trigger) {
+      while (PyDict_Next(func_args, &pos, NULL, &value)) {
+        if (PyObject_IsInstance(value, tracehook->when_type_trigger)) {
+          suppore = 1;
+          goto hookup;
+          break;
+        }
+      }
+      if (suppore) {
+        break;
+      }
+      if (!suppore) {
+        if (tracehook->next) {
+          tracehook = tracehook->next;
+          pos = 0; // reload
+          continue;
+        } else {
+          goto cleanup;
+        }
+      }
+    }
+
+hookup:
     if (result == NULL || result == Py_None) {
       PyObject* tuple = PyTuple_New(1);
       PyTuple_SetItem(tuple, 0, self->trackernode->args);
@@ -88,6 +115,8 @@ static void trigger_trace_hook(ObjTrackerObject *self)
     tracehook = tracehook->next;
   }
 
+cleanup:
+  Py_XDECREF(func_args);
   Py_XDECREF(result);
 }
 
@@ -310,12 +339,18 @@ objtracker_addtracehook(PyObject *obj, PyObject *args, PyObject *kwds)
     self->tracecallback->alias = kw_alias;
   }
 
-  if (PyIter_Check(kw_when_type_trigger)) {
+  if (PyList_Check(kw_when_type_trigger) || PyTuple_Check(kw_when_type_trigger)) {
     self->tracecallback->when_type_trigger = kw_when_type_trigger;
+    Py_INCREF(self->tracecallback->when_type_trigger);
+  } else {
+    self->tracecallback->when_type_trigger = NULL;
   }
 
-  if (PyIter_Check(kw_when_value_trigger)) {
+  if (PyList_Check(kw_when_value_trigger) || PyTuple_Check(kw_when_value_trigger)) {
     self->tracecallback->when_value_trigger = kw_when_value_trigger;
+    Py_INCREF(self->tracecallback->when_value_trigger);
+  } else {
+    self->tracecallback->when_value_trigger = NULL;
   }
   
   Py_RETURN_NONE;

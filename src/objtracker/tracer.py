@@ -22,10 +22,12 @@ class _Tracker(object):
 
   @property
   def log_func_args(self) -> int:
+    """Whether to print trace information"""
     return self.__log_func_args
   
   @log_func_args.setter
   def log_func_args(self, log_func_args: bool) -> None:
+    """Whether to print trace information"""
     if isinstance(log_func_args, bool):
       self.__log_func_args = log_func_args
     else:

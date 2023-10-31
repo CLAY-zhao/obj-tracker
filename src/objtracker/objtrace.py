@@ -20,10 +20,12 @@ class Tracker(_Tracker):
     )
     
   def start(self):
+    """Start trace run"""
     if not self.enable:
       _Tracker.start(self)
   
   def stop(self):
+    """Stop trace run"""
     if self.enable:
       _Tracker.stop(self)
     
@@ -79,6 +81,32 @@ class Tracker(_Tracker):
       when_value_trigger: Union[Tuple, List] = None,
       alias: str = None
   ):
+    """
+    You can track the trigger through the add_hook method. Every time you add a hook method,
+    the hook callback method will be called one by one every time a call is triggered in the
+    Python code, and if the return value is returned in the hook method,
+    the return value will be will be passed as the first parameter of the next hook call.
+
+      >>> tracer = Tracker()
+      >>> tracer.add_hook(hook_func)
+
+    You can also set the conditions under which the hook method is triggered. For example,
+    you can limit the hook call to be triggered only when it matches a certain type or a
+    specified value. (Type precedence is higher than value precedence)
+
+      # When a trace is triggered and the parameter type received is int or float
+      >>> tracer.add_hook(hook_func, when_type_trigger=[int, float])
+
+      # The parameter value received when a trace is triggered is 1 or the "chiu" string
+      >>> tracer.add_hook(hook_func, when_value_trigger=[1, "Chiu"])
+
+    It is not recommended to set type triggering and value triggering at the same time.
+
+    Support chain calls
+      >>> tracer.add_hook(hook_func1).add_hook(hook_func2).add_hook(hook_func3)
+
+    Notice: It should be noted that the trigger type supports bytes type but does not support bytes value!
+    """
     if callback is None:
       return self
     
@@ -94,11 +122,13 @@ class Tracker(_Tracker):
     if when_type_trigger is not None:
       if not isinstance(when_type_trigger, (list, tuple)):
         return self
+      when_type_trigger = tuple(when_type_trigger)
     
     if when_value_trigger is not None:
       if not isinstance(when_value_trigger, (list, tuple)):
         return self
-    
+      when_value_trigger = tuple(when_value_trigger)
+
     self.trace_hook(
       callback=callback,
       alias=alias,
