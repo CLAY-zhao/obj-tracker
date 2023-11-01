@@ -95,6 +95,31 @@ static void trigger_trace_hook(ObjTrackerObject *self)
       }
     }
 
+    if (tracehook->when_value_trigger) {
+      PyObject *iter = PyObject_GetIter(tracehook->when_value_trigger);
+      PyObject *next = NULL;
+      while ((next = PyIter_Next(iter)) != NULL) {
+        while (PyDict_Next(func_args, &pos, NULL, &value)) {
+          if (EQ(value, next)) {
+            goto hookup;
+            break;
+          }
+        }
+        pos = 0; // reload
+      }
+
+      Py_XDECREF(iter);
+      Py_XDECREF(next);
+
+      if (tracehook->next) {
+        tracehook = tracehook->next;
+        pos = 0;
+        continue;
+      } else {
+        goto cleanup;
+      }
+    }
+
 hookup:
     if (result == NULL || result == Py_None) {
       PyObject* tuple = PyTuple_New(1);
@@ -107,16 +132,18 @@ hookup:
       PyTuple_SetItem(tuple, 1, self->trackernode->args);
       Py_INCREF(self->trackernode->args);
       result = PyObject_CallObject(tracehook->callback, tuple);
-      if (PyErr_Occurred()) {
-        PyObject *exc_type, *exc_value, *exc_tb;
-        if (PyErr_ExceptionMatches(PyExc_TypeError)) {
-          PyErr_Fetch(&exc_type, &exc_value, &exc_tb);
-          printf("\n\033[0;31mTypeError: %s, (Please check if the return value is set in the previous hook, but the next hook does not accept enough parameters?)\033[0m\n",
-                PyUnicode_AsUTF8(exc_value));
-          exit(-1);
-        }
+    }
+
+    if (PyErr_Occurred()) {
+      PyObject *exc_type, *exc_value, *exc_tb;
+      if (PyErr_ExceptionMatches(PyExc_TypeError)) {
+        PyErr_Fetch(&exc_type, &exc_value, &exc_tb);
+        printf("\n\033[0;31mTypeError: %s, (Please check if the return value is set in the previous hook, but the next hook does not accept enough parameters?)\033[0m\n",
+              PyUnicode_AsUTF8(exc_value));
+        exit(-1);
       }
     }
+
     if (tracehook->terminate >= 1) {
       printf("\n\033[0;33mThe program has been terminated. Please set \"terminate\" to False to resume.\033[0m\n");
       exit(-1);
