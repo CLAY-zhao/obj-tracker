@@ -79,7 +79,8 @@ class Tracker(_Tracker):
       self, callback: Optional[Callable] = None,
       when_type_trigger: Union[Tuple, List] = None,
       when_value_trigger: Union[Tuple, List] = None,
-      alias: str = None
+      alias: str = None,
+      terminate: bool = False
   ):
     """
     You can track the trigger through the add_hook method. Every time you add a hook method,
@@ -94,7 +95,7 @@ class Tracker(_Tracker):
     you can limit the hook call to be triggered only when it matches a certain type or a
     specified value. (Type precedence is higher than value precedence)
 
-      # When a trace is triggered and the parameter type received is int or float
+      # When a trace is triggered and the parameter type received is int or float. The typing module type is not supported for the time being.
       >>> tracer.add_hook(hook_func, when_type_trigger=[int, float])
 
       # The parameter value received when a trace is triggered is 1 or the "chiu" string
@@ -105,6 +106,8 @@ class Tracker(_Tracker):
     Support chain calls
       >>> tracer.add_hook(hook_func1).add_hook(hook_func2).add_hook(hook_func3)
 
+    In some cases, you may only want to stop the program after a certain hook is triggered. In this case, you can specify "terminate" as True.
+    
     Notice: It should be noted that the trigger type supports bytes type but does not support bytes value!
     """
     if callback is None:
@@ -133,6 +136,35 @@ class Tracker(_Tracker):
       callback=callback,
       alias=alias,
       when_type_trigger=when_type_trigger,
-      when_value_trigger=when_value_trigger
+      when_value_trigger=when_value_trigger,
+      terminate=terminate
     )
     return self
+
+  def add_hook_number(self, callback: Optional[Callable] = None, alias: str = None, terminate: bool = False):
+    """for numeric types"""
+    return self.add_hook(callback=callback, when_type_trigger=[int, float], alias=alias, terminate=terminate)
+
+  def add_hook_string(self, callback: Optional[Callable] = None, alias: str = None, terminate: bool = False):
+    """for string types"""
+    return self.add_hook(callback=callback, when_type_trigger=[str], alias=alias, terminate=terminate)
+  
+  def add_hook_list(self, callback: Optional[Callable] = None, alias: str = None, terminate: bool = False):
+    """for list types"""
+    return self.add_hook(callback=callback, when_type_trigger=[list], alias=alias, terminate=terminate)
+  
+  def add_hook_tuple(self, callback: Optional[Callable] = None, alias: str = None, terminate: bool = False):
+    """for tuple types"""
+    return self.add_hook(callback=callback, when_type_trigger=[tuple], alias=alias, terminate=terminate)
+  
+  def add_hook_dict(self, callback: Optional[Callable] = None, alias: str = None, terminate: bool = False):
+    """for dict types"""
+    return self.add_hook(callback=callback, when_type_trigger=[dict], alias=alias, terminate=terminate)
+  
+  def add_hook_set(self, callback: Optional[Callable] = None, alias: str = None, terminate: bool = False):
+    """for set types"""
+    return self.add_hook(callback=callback, when_type_trigger=[set], alias=alias, terminate=terminate)
+  
+  def add_hook_any(self, callback: Optional[Callable] = None, alias: str = None, terminate: bool = False):
+    """for any types"""
+    return self.add_hook(callback=callback, when_type_trigger=[object], alias=alias, terminate=terminate)

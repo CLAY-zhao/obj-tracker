@@ -75,12 +75,13 @@ class _Tracker(object):
   def trace_hook(
       self, callback: Optional[Callable] = None, alias: str = None,
       when_type_trigger: Union[Tuple, List] = None,
-      when_value_trigger: Union[Tuple, List] = None
+      when_value_trigger: Union[Tuple, List] = None,
+      terminate: bool = False
     ):
-    self._objtracker.add_trace_hook(
+    self._objtracker.addtracehook(
       callback=callback,
       alias=alias,
       when_type_trigger=when_type_trigger,
-      when_value_trigger=when_value_trigger
+      when_value_trigger=when_value_trigger,
+      terminate=terminate
     )
-    print("ok")

@@ -48,7 +48,7 @@ LARGE_INTEGER qpc_freq;
 static PyMethodDef ObjTrakcer_methods[] = {
   {"start", (PyCFunction)objtracker_start, METH_VARARGS, "start tracker"},
   {"stop", (PyCFunction)objtracker_stop, METH_VARARGS, "stop tracker"},
-  {"add_trace_hook", (PyCFunction)objtracker_addtracehook, METH_VARARGS | METH_KEYWORDS, "add trace hook"},
+  {"addtracehook", (PyCFunction)objtracker_addtracehook, METH_VARARGS | METH_KEYWORDS, "add trace hook"},
   {"config", (PyCFunction)objtracker_config, METH_VARARGS | METH_KEYWORDS, "config tracker"},
   {"dump", (PyCFunction)objtracker_dump, METH_VARARGS, "dump tracker"},
   {NULL, NULL, 0, NULL}
@@ -75,27 +75,23 @@ static void trigger_trace_hook(ObjTrackerObject *self)
   PyObject* value = NULL;
   Py_ssize_t pos = 0;
   PyObject* func_args = PyDict_GetItemString(self->trackernode->args, "func_args");
-  int suppore = 0;
   while (tracehook) {
     if (tracehook->when_type_trigger) {
       while (PyDict_Next(func_args, &pos, NULL, &value)) {
         if (PyObject_IsInstance(value, tracehook->when_type_trigger)) {
-          suppore = 1;
           goto hookup;
           break;
         }
       }
-      if (suppore) {
-        break;
-      }
-      if (!suppore) {
-        if (tracehook->next) {
-          tracehook = tracehook->next;
-          pos = 0; // reload
-          continue;
-        } else {
-          goto cleanup;
-        }
+      // if (suppore) {
+      //   break;
+      // }
+      if (tracehook->next) {
+        tracehook = tracehook->next;
+        pos = 0; // reload
+        continue;
+      } else {
+        goto cleanup;
       }
     }
 
@@ -111,6 +107,19 @@ hookup:
       PyTuple_SetItem(tuple, 1, self->trackernode->args);
       Py_INCREF(self->trackernode->args);
       result = PyObject_CallObject(tracehook->callback, tuple);
+      if (PyErr_Occurred()) {
+        PyObject *exc_type, *exc_value, *exc_tb;
+        if (PyErr_ExceptionMatches(PyExc_TypeError)) {
+          PyErr_Fetch(&exc_type, &exc_value, &exc_tb);
+          printf("\n\033[0;31mTypeError: %s, (Please check if the return value is set in the previous hook, but the next hook does not accept enough parameters?)\033[0m\n",
+                PyUnicode_AsUTF8(exc_value));
+          exit(-1);
+        }
+      }
+    }
+    if (tracehook->terminate >= 1) {
+      printf("\n\033[0;33mThe program has been terminated. Please set \"terminate\" to False to resume.\033[0m\n");
+      exit(-1);
     }
     tracehook = tracehook->next;
   }
@@ -268,7 +277,8 @@ objtracker_tracefunc(PyObject *obj, PyFrameObject *frame, int what, PyObject *ar
     return 0;
   }
 
-  if (what == PyTrace_CALL) {
+  if (what == PyTrace_CALL || what == PyTrace_RETURN || 
+        what == PyTrace_C_CALL || what == PyTrace_C_RETURN || what == PyTrace_C_EXCEPTION) {
     int is_call = (what == PyTrace_CALL || what == PyTrace_C_CALL);
     int is_return = (what == PyTrace_RETURN || what == PyTrace_C_RETURN || what == PyTrace_C_EXCEPTION);
 
@@ -283,6 +293,7 @@ objtracker_tracefunc(PyObject *obj, PyFrameObject *frame, int what, PyObject *ar
         log_func_args(self->trackernode, frame);
       }
       self->trackernode->ts = get_ts(self->trackernode);
+      printf("%lld\n", (long long) get_ts(self->trackernode) / 1000);
       objtracker_createthreadinfo(self);
 
       if (self->log_func_args) {
@@ -294,12 +305,11 @@ objtracker_tracefunc(PyObject *obj, PyFrameObject *frame, int what, PyObject *ar
       if (self->tracecallback) {
         trigger_trace_hook(self);
       }
-    }
-
-  } else if (what == PyTrace_RETURN) {
-    if (self->trackernode) {
-      double dur = get_ts(self->trackernode) - self->trackernode->ts;
-      self->trackernode->dur = dur;
+    } else if (is_return) {
+      if (self->trackernode) {
+        double dur = get_ts(self->trackernode) - self->trackernode->ts;
+        self->trackernode->dur = dur;
+      }
     }
   }
 
@@ -309,16 +319,18 @@ objtracker_tracefunc(PyObject *obj, PyFrameObject *frame, int what, PyObject *ar
 static PyObject*
 objtracker_addtracehook(PyObject *obj, PyObject *args, PyObject *kwds)
 {
-  static char* kwlist[] = {"callback", "alias", "when_type_trigger", "when_value_trigger", NULL};
+  static char* kwlist[] = {"callback", "alias", "when_type_trigger", "when_value_trigger", "terminate", NULL};
   PyObject *kw_callback = NULL;
   char* kw_alias = NULL;
   PyObject *kw_when_type_trigger = NULL;
   PyObject *kw_when_value_trigger = NULL;
-  if (!PyArg_ParseTupleAndKeywords(args, kwds, "|OsOO", kwlist,
+  int kw_terminate = 0;
+  if (!PyArg_ParseTupleAndKeywords(args, kwds, "|OsOOi", kwlist,
         &kw_callback,
         &kw_alias,
         &kw_when_type_trigger,
-        &kw_when_value_trigger)) {
+        &kw_when_value_trigger,
+        &kw_terminate)) {
           return NULL;
         }
 
@@ -351,6 +363,12 @@ objtracker_addtracehook(PyObject *obj, PyObject *args, PyObject *kwds)
     Py_INCREF(self->tracecallback->when_value_trigger);
   } else {
     self->tracecallback->when_value_trigger = NULL;
+  }
+
+  if (kw_terminate >= 0) {
+    self->tracecallback->terminate = kw_terminate;
+  } else {
+    self->tracecallback->terminate = 0;
   }
   
   Py_RETURN_NONE;
@@ -457,8 +475,8 @@ objtracker_dump(ObjTrackerObject *self, PyObject *args)
       node = node->next;
       continue;
     }
-    long long ts_long = node->ts;
-    long long dur_long = node->dur;
+    long long ts_long = node->ts / 1000;
+    long long dur_long = node->dur / 10;
     fprintf(
       fptr, "{\"pid\":%lu,\"tid\":%lu,\"ts\":%lld.%03lld,\"ph\":\"X\",\"dur\":%lld.%03lld,\"cat\":\"fee\",\"name\":\"%s (%s)\",\"args\":{\"vars\":[",
       pid,
@@ -579,7 +597,9 @@ ObjTracker_New(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 {
   ObjTrackerObject *self = (ObjTrackerObject *)type->tp_alloc(type, 0);
   if (self) {
-    QueryPerformanceCounter(&qpc_freq);
+#if _WIN32
+    QueryPerformanceFrequency(&qpc_freq);
+#endif
     self->trace_total = 0;
     self->collecting = 0;
     self->fix_pid = 0;

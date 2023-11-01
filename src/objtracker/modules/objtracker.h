@@ -38,6 +38,7 @@ struct TraceInfoCallback {
   char* alias;
   PyObject* when_type_trigger;
   PyObject* when_value_trigger;
+  int terminate; // Used to mark whether to end the run
   struct TraceInfoCallback *next;
 };
 
