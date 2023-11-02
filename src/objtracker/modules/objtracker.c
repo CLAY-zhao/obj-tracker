@@ -23,11 +23,13 @@ static PyObject* objtracker_stop(ObjTrackerObject *self, PyObject *args);
 static PyObject* objtracker_pause(ObjTrackerObject *self, PyObject *args);
 static PyObject* objtracker_resume(ObjTrackerObject *self, PyObject *args);
 static PyObject* objtracker_addtracehook(PyObject *obj, PyObject *args, PyObject *kwds);
+static PyObject* objtracker_addreturntrace(ObjTrackerObject *obj, PyObject *args, PyObject *kwds);
 static PyObject* objtracker_config(ObjTrackerObject *self, PyObject *args, PyObject *kwds);
 static PyObject* objtracker_dump(ObjTrackerObject *self, PyObject *args);
 static PyObject* objtracker_createthreadinfo(ObjTrackerObject *self);
 static void trigger_trace_hook(ObjTrackerObject *self);
 static void log_func_args(struct ObjectNode *node, PyFrameObject *frame);
+static void trace_return_value(struct ReturnTrace *returntrace, PyFrameObject *frame, PyObject *arg);
 
 ObjTrackerObject* curr_tracker = NULL;
 PyObject* pdb_module = NULL;
@@ -54,6 +56,7 @@ static PyMethodDef ObjTrakcer_methods[] = {
   {"pause", (PyCFunction)objtracker_pause, METH_VARARGS, "pause tracker"},
   {"resume", (PyCFunction)objtracker_resume, METH_VARARGS, "resume tracker"},
   {"addtracehook", (PyCFunction)objtracker_addtracehook, METH_VARARGS | METH_KEYWORDS, "add trace hook"},
+  {"addreturntrace", (PyCFunction)objtracker_addreturntrace, METH_VARARGS | METH_KEYWORDS, "add return trace"},
   {"config", (PyCFunction)objtracker_config, METH_VARARGS | METH_KEYWORDS, "config tracker"},
   {"dump", (PyCFunction)objtracker_dump, METH_VARARGS, "dump tracker"},
   {NULL, NULL, 0, NULL}
@@ -260,7 +263,33 @@ static void log_func_args(struct ObjectNode *node, PyFrameObject *frame)
     Py_XDECREF(code);
     Py_XDECREF(names);
   }
+}
 
+static void trace_return_value(struct ReturnTrace *returntrace, PyFrameObject *frame, PyObject *arg)
+{
+  PyObject* code = PyFrame_GetCode(frame);
+  PyObject* id = PyLong_FromVoidPtr(code);
+  PyObject* result = NULL;
+
+  while (returntrace) {
+    if (returntrace->id != PyLong_AsLongLong(id)) {
+      goto next;
+    }
+
+    if (!returntrace->iterative_compare) {
+      result = PyTuple_GetItem(returntrace->return_values, returntrace->subscript);
+      if (EQ(arg, result)) {
+        printf("eq!\n");
+      }
+    } else {
+      printf("iter\n");
+    }
+
+    Py_XDECREF(result);
+
+next:
+    returntrace = returntrace->next;
+  }
 }
 
 static int
@@ -363,6 +392,9 @@ objtracker_tracefunc(PyObject *obj, PyFrameObject *frame, int what, PyObject *ar
         double dur = get_ts(self->trackernode) - self->trackernode->ts;
         self->trackernode->dur = dur;
       }
+      if (self->returntrace) {
+        trace_return_value(self->returntrace, frame, arg);
+      }
     }
   }
 
@@ -424,6 +456,56 @@ objtracker_addtracehook(PyObject *obj, PyObject *args, PyObject *kwds)
     self->tracecallback->terminate = 0;
   }
   
+  Py_RETURN_NONE;
+}
+
+static PyObject*
+objtracker_addreturntrace(ObjTrackerObject *obj, PyObject *args, PyObject *kwds)
+{
+  static char* kwlist[] = {"id", "on_raise", "iterative_compare", "return_values",
+          NULL};
+  long long kw_id = 0;
+  int kw_on_raise = 0;
+  int kw_iterative_compare = 0;
+  int kw_subscript = 0;
+  PyObject* kw_return_values = NULL;
+  if (!PyArg_ParseTupleAndKeywords(args, kwds, "|LiiO", kwlist,
+        &kw_id,
+        &kw_on_raise,
+        &kw_iterative_compare,
+        &kw_return_values)) {
+      return NULL;
+  }
+  
+  ObjTrackerObject *self = (ObjTrackerObject *)obj;
+  if (!self->returntrace) {
+    self->returntrace = (struct ReturnTrace *) PyMem_Calloc(1, sizeof(struct ReturnTrace));
+  } else {
+    struct ReturnTrace *tmp = self->returntrace;
+    self->returntrace = (struct ReturnTrace *) PyMem_Calloc(1, sizeof(struct ReturnTrace));
+    self->returntrace->next = tmp;
+  }
+
+  if (kw_id >= 0) {
+    self->returntrace->id = kw_id;
+  }
+
+  if (kw_on_raise >= 0) {
+    self->returntrace->on_raise = kw_on_raise;
+  }
+
+  if (kw_iterative_compare >= 0) {
+    self->returntrace->iterative_compare = kw_iterative_compare;
+  }
+
+  if (PyTuple_Check(kw_return_values)) {
+    self->returntrace->size = PyTuple_GET_SIZE(kw_return_values);
+    self->returntrace->return_values = kw_return_values;
+    Py_INCREF(self->returntrace->return_values);
+  }
+
+  self->returntrace->subscript = 0;
+
   Py_RETURN_NONE;
 }
 
@@ -660,6 +742,7 @@ ObjTracker_New(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     self->output_file = NULL;
     self->trackernode = NULL;
     self->tracecallback = NULL;
+    self->returntrace = NULL;
     self->metadata = NULL;
     objtracker_createthreadinfo(self);
   }

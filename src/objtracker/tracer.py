@@ -93,3 +93,12 @@ class _Tracker(object):
       when_value_trigger=when_value_trigger,
       terminate=terminate
     )
+
+  def return_trace(
+      self, c_id: int, on_raise: bool = False, iterative_compare: bool = False,
+      return_values: Union[List, Tuple] = None
+    ):
+    self._objtracker.addreturntrace(
+      id=c_id, on_raise=on_raise, iterative_compare=iterative_compare,
+      return_values=return_values
+    )

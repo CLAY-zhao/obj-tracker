@@ -42,6 +42,16 @@ struct TraceInfoCallback {
   struct TraceInfoCallback *next;
 };
 
+struct ReturnTrace {
+  long long id;
+  int on_raise; // Whether to throw an exception to terminate the program when the comparison fails
+  int iterative_compare;
+  int subscript;
+  int size;
+  PyObject* return_values;
+  struct ReturnTrace *next;
+};
+
 typedef struct
 {
   PyObject_HEAD
@@ -52,6 +62,7 @@ typedef struct
   int log_func_args;
   struct ObjectNode* trackernode;
   struct TraceInfoCallback* tracecallback;
+  struct ReturnTrace* returntrace;
   char* output_file;
 #ifdef Py_NOGIL
   PyMutex mutex;

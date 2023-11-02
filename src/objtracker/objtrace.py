@@ -1,6 +1,7 @@
 import builtins
 import json
 import os
+from types import MethodType, FunctionType
 from typing import Optional, Union, Callable, List, Tuple
 
 from .utils import replace_backslashes
@@ -175,6 +176,28 @@ class Tracker(_Tracker):
   def add_hook_any(self, callback: Optional[Callable] = None, alias: str = None, terminate: bool = False):
     """for any types"""
     return self.add_hook(callback=callback, when_type_trigger=[object], alias=alias, terminate=terminate)
+  
+  def add_return_trace(
+      self, obj: Optional[Callable] = None, on_raise: bool = False, iterative_compare: bool = False,
+      return_values: Union[List, Tuple] = None
+  ):
+    if obj is None or not isinstance(obj, (FunctionType, MethodType)):
+      return
+    
+    __code_id__ = id(obj.__code__)
+    
+    if not isinstance(on_raise, bool):
+      return
+    
+    if not isinstance(iterative_compare, bool):
+      return
+    
+    if isinstance(return_values, (list, tuple)):
+      return_values = tuple(return_values)
+    else:
+      return_values = (return_values,)
+
+    self.return_trace(__code_id__, on_raise, iterative_compare, return_values)
 
 
 def get_objtrace() -> Optional[Tracker]:
