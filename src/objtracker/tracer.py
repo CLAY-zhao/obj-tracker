@@ -69,6 +69,14 @@ class _Tracker(object):
     self.enable = False
     self._objtracker.stop()
     
+  def pause(self) -> None:
+    if self.enable:
+      self._objtracker.pause()
+  
+  def resume(self) -> None:
+    if self.enable:
+      self._objtracker.resume()
+    
   def dump(self, filename: str) -> None:
     self._objtracker.dump(filename)
 

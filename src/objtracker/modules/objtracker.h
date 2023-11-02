@@ -48,6 +48,7 @@ typedef struct
   int trace_total;
   int collecting;
   long fix_pid;
+  int log_code_detail;
   int log_func_args;
   struct ObjectNode* trackernode;
   struct TraceInfoCallback* tracecallback;

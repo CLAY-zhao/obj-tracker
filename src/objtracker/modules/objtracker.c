@@ -20,6 +20,8 @@
 int objtracker_tracefunc(PyObject *obj, PyFrameObject *frame, int what, PyObject *arg);
 static PyObject* objtracker_start(ObjTrackerObject *self, PyObject *args);
 static PyObject* objtracker_stop(ObjTrackerObject *self, PyObject *args);
+static PyObject* objtracker_pause(ObjTrackerObject *self, PyObject *args);
+static PyObject* objtracker_resume(ObjTrackerObject *self, PyObject *args);
 static PyObject* objtracker_addtracehook(PyObject *obj, PyObject *args, PyObject *kwds);
 static PyObject* objtracker_config(ObjTrackerObject *self, PyObject *args, PyObject *kwds);
 static PyObject* objtracker_dump(ObjTrackerObject *self, PyObject *args);
@@ -28,6 +30,7 @@ static void trigger_trace_hook(ObjTrackerObject *self);
 static void log_func_args(struct ObjectNode *node, PyFrameObject *frame);
 
 ObjTrackerObject* curr_tracker = NULL;
+PyObject* pdb_module = NULL;
 PyObject* inspect_module = NULL;
 PyObject* traceback_module = NULL;
 PyObject* thread_module = NULL;
@@ -48,6 +51,8 @@ LARGE_INTEGER qpc_freq;
 static PyMethodDef ObjTrakcer_methods[] = {
   {"start", (PyCFunction)objtracker_start, METH_VARARGS, "start tracker"},
   {"stop", (PyCFunction)objtracker_stop, METH_VARARGS, "stop tracker"},
+  {"pause", (PyCFunction)objtracker_pause, METH_VARARGS, "pause tracker"},
+  {"resume", (PyCFunction)objtracker_resume, METH_VARARGS, "resume tracker"},
   {"addtracehook", (PyCFunction)objtracker_addtracehook, METH_VARARGS | METH_KEYWORDS, "add trace hook"},
   {"config", (PyCFunction)objtracker_config, METH_VARARGS | METH_KEYWORDS, "config tracker"},
   {"dump", (PyCFunction)objtracker_dump, METH_VARARGS, "dump tracker"},
@@ -293,6 +298,28 @@ objtracker_stop(ObjTrackerObject *self, PyObject *args)
   Py_RETURN_NONE;
 }
 
+static PyObject*
+objtracker_pause(ObjTrackerObject *self, PyObject *args)
+{
+  if (self->collecting) {
+    PyGILState_STATE state = PyGILState_Ensure();
+    PyEval_SetTrace(NULL, NULL);
+    PyGILState_Release(state);
+  }
+  Py_RETURN_NONE;
+}
+
+static PyObject*
+objtracker_resume(ObjTrackerObject *self, PyObject *args)
+{
+  if (self->collecting) {
+    PyGILState_STATE state = PyGILState_Ensure();
+    PyEval_SetTrace(objtracker_tracefunc, (PyObject*)self);
+    PyGILState_Release(state);
+  }
+  Py_RETURN_NONE;
+}
+
 int
 objtracker_tracefunc(PyObject *obj, PyFrameObject *frame, int what, PyObject *arg)
 {
@@ -320,7 +347,6 @@ objtracker_tracefunc(PyObject *obj, PyFrameObject *frame, int what, PyObject *ar
         log_func_args(self->trackernode, frame);
       }
       self->trackernode->ts = get_ts(self->trackernode);
-      printf("%lld\n", (long long) get_ts(self->trackernode) / 1000);
       objtracker_createthreadinfo(self);
 
       if (self->log_func_args) {
@@ -629,6 +655,7 @@ ObjTracker_New(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 #endif
     self->trace_total = 0;
     self->collecting = 0;
+    self->log_func_args = 0;
     self->fix_pid = 0;
     self->output_file = NULL;
     self->trackernode = NULL;
@@ -680,6 +707,7 @@ PyInit_tracker(void)
     return NULL;
   }
 
+  pdb_module = PyImport_ImportModule("pdb");
   inspect_module = PyImport_ImportModule("inspect");
   traceback_module = PyImport_ImportModule("traceback");
   thread_module = PyImport_ImportModule("threading");

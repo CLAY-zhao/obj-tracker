@@ -1,3 +1,4 @@
+import builtins
 import json
 import os
 from typing import Optional, Union, Callable, List, Tuple
@@ -12,12 +13,15 @@ class Tracker(_Tracker):
   def __init__(
       self,
       log_func_args: bool = False,
-      output_file: str = "result.json"
+      output_file: str = "result.json",
+      register_global: bool = True
   ) -> None:
     super().__init__(
       log_func_args=log_func_args,
       output_file=output_file
     )
+    if register_global:
+      self.register_global()
     
   def start(self):
     """Start trace run"""
@@ -45,6 +49,9 @@ class Tracker(_Tracker):
   def __exit__(self, exc_type, exc_value, trace) -> None:
     self.stop()
     self.save()
+    
+  def register_global(self) -> None:
+    builtins.__dict__["__obj_tracker__"] = self
 
   def save(self, output_file: Optional[str] = None) -> None:
     if output_file is None:
@@ -168,3 +175,7 @@ class Tracker(_Tracker):
   def add_hook_any(self, callback: Optional[Callable] = None, alias: str = None, terminate: bool = False):
     """for any types"""
     return self.add_hook(callback=callback, when_type_trigger=[object], alias=alias, terminate=terminate)
+
+
+def get_objtrace() -> Optional[Tracker]:
+  return builtins.__dict__.get("__obj_tracker__", None)
