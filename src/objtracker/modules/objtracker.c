@@ -106,6 +106,7 @@ static void trigger_trace_hook(ObjTrackerObject *self)
     }
 
     if (tracehook->when_value_trigger) {
+      pos = 0; // reload
       PyObject *iter = PyObject_GetIter(tracehook->when_value_trigger);
       PyObject *next = NULL;
       while ((next = PyIter_Next(iter)) != NULL) {
@@ -115,7 +116,6 @@ static void trigger_trace_hook(ObjTrackerObject *self)
             break;
           }
         }
-        pos = 0; // reload
       }
 
       Py_XDECREF(iter);

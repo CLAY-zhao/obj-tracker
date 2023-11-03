@@ -85,15 +85,16 @@ def register_hook(
   ):
   
   def inner(func: Callable) -> Callable:
+    tracer = objtrace
+    if tracer is None:
+      tracer = get_objtrace()
+      if not tracer:
+        raise NameError("register_hook only works with global objtrace")
+    tracer.add_hook(func, when_type_trigger, when_value_trigger, alias, terminate)
     
     @functools.wraps(func)
     def wrapper(*args, **kwargs) -> Any:
-      tracer = objtrace
-      if tracer is None:
-        tracer = get_objtrace()
-        if not tracer:
-          raise NameError("register_hook only works with global objtrace")
-      return tracer.add_hook(func, when_type_trigger, when_value_trigger, alias, terminate)
+      return tracer
     
     return wrapper
   
