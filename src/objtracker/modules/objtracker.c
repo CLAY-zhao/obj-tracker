@@ -14,6 +14,8 @@
 #include "utils.h"
 
 #define EQ(left, right) PyObject_RichCompareBool(left, right, Py_EQ)
+#define NE(left, right) PyObject_RichCompareBool(left, right, Py_NE)
+#define GET_STR(obj) PyUnicode_AsUTF8(PyObject_Repr(obj))
 
 // Function declarations
 
@@ -269,6 +271,7 @@ static void trace_return_value(struct ReturnTrace *returntrace, PyFrameObject *f
 {
   PyObject* code = PyFrame_GetCode(frame);
   PyObject* id = PyLong_FromVoidPtr(code);
+  PyObject* func = frame->f_code->co_name;
   PyObject* result = NULL;
 
   while (returntrace) {
@@ -278,11 +281,29 @@ static void trace_return_value(struct ReturnTrace *returntrace, PyFrameObject *f
 
     if (!returntrace->iterative_compare) {
       result = PyTuple_GetItem(returntrace->return_values, returntrace->subscript);
-      if (EQ(arg, result)) {
-        printf("eq!\n");
+      if (NE(arg, result)) {
+        if (returntrace->on_raise) {
+          PrintError(PyUnicode_FromFormat("Error: (call: %s)\n>>> %s != %s <- return\n", GET_STR(func), GET_STR(result), GET_STR(arg)));
+          exit(-1);
+        } else {
+          PrintWarning(PyUnicode_FromFormat("Warning: (call: %s)\n>>> %s != %s <- return\n", GET_STR(func), GET_STR(result), GET_STR(arg)));
+        }
       }
     } else {
-      printf("iter\n");
+      if (returntrace->subscript + 1 <= returntrace->size) {
+        result = PyTuple_GetItem(returntrace->return_values, returntrace->subscript);
+        if (NE(arg, result)) {
+          if (returntrace->on_raise) {
+            PrintError(PyUnicode_FromFormat("Error: (call: %s)\n>>> %s != %s <- return\n", GET_STR(func), GET_STR(result), GET_STR(arg)));
+            exit(-1);
+          } else {
+            PrintWarning(PyUnicode_FromFormat("Warning: (call: %s)\n>>> %s != %s <- return\n", GET_STR(func), GET_STR(result), GET_STR(arg)));
+          }
+        }
+        returntrace->subscript++;
+      } else {
+        PrintWarning(PyUnicode_FromFormat("The verification range has been exceeded. The current maximum range is: %d", returntrace->size));
+      }
     }
 
     Py_XDECREF(result);
@@ -353,7 +374,6 @@ int
 objtracker_tracefunc(PyObject *obj, PyFrameObject *frame, int what, PyObject *arg)
 {
   ObjTrackerObject *self = (ObjTrackerObject *)obj;
-  frame->f_trace_opcodes = 1;
 
   if (!self->collecting) {
     PyEval_SetTrace(objtracker_tracefuncdisabled, obj);
@@ -364,6 +384,25 @@ objtracker_tracefunc(PyObject *obj, PyFrameObject *frame, int what, PyObject *ar
         what == PyTrace_C_CALL || what == PyTrace_C_RETURN || what == PyTrace_C_EXCEPTION) {
     int is_call = (what == PyTrace_CALL || what == PyTrace_C_CALL);
     int is_return = (what == PyTrace_RETURN || what == PyTrace_C_RETURN || what == PyTrace_C_EXCEPTION);
+
+    // Check include/exclude files
+    if (self->exclude_files) {
+      PyObject* files = NULL;
+      int record = 0;
+      files = self->exclude_files;
+      Py_ssize_t length = PyList_GET_SIZE(files);
+      PyObject* name = frame->f_code->co_filename;
+      for (int i = 0; i < length; i++) {
+        PyObject* f = PyList_GET_ITEM(files, i);
+        if (startswith(PyUnicode_AsUTF8(name), PyUnicode_AsUTF8(f))) {
+          record++;
+          break;
+        }
+      }
+      if (record != 0) {
+        return 0;
+      }
+    }
 
     if (is_call) {
       if (!self->trackernode) {
@@ -513,12 +552,14 @@ static PyObject*
 objtracker_config(ObjTrackerObject *self, PyObject *args, PyObject *kwds)
 {
   static char* kwlist[] = {"log_func_args", "output_file", 
-          NULL};
+          "exclude_files", NULL};
   int kw_log_func_args = 0;
   char* kw_output_file = NULL;
-  if (!PyArg_ParseTupleAndKeywords(args, kwds, "|is", kwlist,
+  PyObject* kw_exclude_files = NULL;
+  if (!PyArg_ParseTupleAndKeywords(args, kwds, "|isO", kwlist,
         &kw_log_func_args,
-        &kw_output_file)) {
+        &kw_output_file,
+        &kw_exclude_files)) {
       return NULL;
   }
 
@@ -536,6 +577,14 @@ objtracker_config(ObjTrackerObject *self, PyObject *args, PyObject *kwds)
       exit(1);
     }
     strcpy(self->output_file, kw_output_file);
+  }
+
+  if (kw_exclude_files && kw_exclude_files != Py_None) {
+    if (self->exclude_files) {
+      Py_DECREF(self->exclude_files);
+    }
+    self->exclude_files = kw_exclude_files;
+    Py_INCREF(self->exclude_files);
   }
 
   Py_RETURN_NONE;
@@ -740,6 +789,7 @@ ObjTracker_New(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     self->log_func_args = 0;
     self->fix_pid = 0;
     self->output_file = NULL;
+    self->exclude_files = NULL;
     self->trackernode = NULL;
     self->tracecallback = NULL;
     self->returntrace = NULL;

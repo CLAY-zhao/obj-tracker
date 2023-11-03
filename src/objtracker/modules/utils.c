@@ -56,14 +56,17 @@ void Printer(const char *content, enum Color color)
 
 void Print_Trace_Info(struct ObjectNode *node)
 {
+  PyObject *func_args = PyDict_GetItemString(node->args, "func_args");
+  if (PyDict_Size(func_args) == 0) {
+    return;
+  }
+
   Printer("====== Trace Triggered ======", RED);
   Printer("Call Stack (most recent call last):", RED);
   // if (log_stack > 0)
   //   Print_Stack(frame);
   Printer(ASUTF8(PyUnicode_FromFormat("lineno: %d -> %s (call: %s)", node->lineno, ASUTF8(node->filename), ASUTF8(node->name))), GREEN);
   Printer("<", CYAN);
-
-  PyObject *func_args = PyDict_GetItemString(node->args, "func_args");
 
   Py_ssize_t pos = 0;
   PyObject *key = NULL;
@@ -135,4 +138,14 @@ void Ignore_Builtin_Trace(PyObject *filename, int lineno)
   Printer("Warning: Built-in methods cannot be tracked, Because it is implemented by CPython.", YELLOW);
   Printer(ASUTF8(PyUnicode_Concat(PyUnicode_FromFormat("lineno: %d -> ", lineno), filename)), GREEN);
   Printer("", DEFAULT);
+}
+
+void PrintWarning(PyObject *msg)
+{
+  Printer(ASUTF8(msg), YELLOW);
+}
+
+void PrintError(PyObject *msg)
+{
+  Printer(ASUTF8(msg), RED);
 }

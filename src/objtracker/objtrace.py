@@ -15,11 +15,13 @@ class Tracker(_Tracker):
       self,
       log_func_args: bool = False,
       output_file: str = "result.json",
+      exclude_files: Optional[List] = None,
       register_global: bool = True
   ) -> None:
     super().__init__(
       log_func_args=log_func_args,
-      output_file=output_file
+      output_file=output_file,
+      exclude_files=exclude_files
     )
     if register_global:
       self.register_global()

@@ -63,6 +63,7 @@ typedef struct
   struct ObjectNode* trackernode;
   struct TraceInfoCallback* tracecallback;
   struct ReturnTrace* returntrace;
+  PyObject* exclude_files;
   char* output_file;
 #ifdef Py_NOGIL
   PyMutex mutex;

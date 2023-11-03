@@ -50,6 +50,31 @@ def trace_and_save(
   return inner
 
 
+def trace_return(
+    method: Optional[Callable] = None, on_raise: bool = False,
+    iterative_compare: bool = False, return_values: Union[List, Tuple] = None,
+    objtrace: Optional[Tracker] = None
+  ):
+  
+  def inner(func: Optional[Callable]) -> Callable:
+    tracer = objtrace
+    if tracer is None:
+      tracer = get_objtrace()
+      if not tracer:
+        raise NameError("trace_return only works with global objtrace")
+    tracer.add_return_trace(func, on_raise, iterative_compare, return_values)
+
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+      return func(*args, **kwargs)
+
+    return wrapper
+  
+  if method:
+    return inner(method)
+  return inner
+
+
 def register_hook(
     method: Optional[Callable] = None,
     when_type_trigger: Union[List, Tuple] = None,

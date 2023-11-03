@@ -1,4 +1,5 @@
-from typing import Optional, Union, Callable, List, Tuple
+import os
+from typing import Optional, Union, Callable, List, Tuple, Sequence
 
 import objtracker.tracker as objtracker
 
@@ -10,7 +11,8 @@ class _Tracker(object):
   def __init__(
       self,
       log_func_args: bool = False,
-      output_file: Optional[str] = None
+      output_file: Optional[str] = None,
+      exclude_files: Optional[List] = None
     ) -> None:
     self.initialized = False
     self.enable = False
@@ -18,6 +20,7 @@ class _Tracker(object):
     self._objtracker = objtracker.ObjTracker()
     self.log_func_args = log_func_args
     self.output_file = output_file
+    self.exclude_files = exclude_files
     self.initialized = True
 
   @property
@@ -48,13 +51,33 @@ class _Tracker(object):
       raise ValueError("output_file has to be a string")
     self.config()
 
+  @property
+  def exclude_files(self) -> Sequence[str]:
+    return self.__exclude_files
+  
+  @exclude_files.setter
+  def exclude_files(self, exclude_files: Sequence[str]) -> None:
+    if exclude_files is None:
+      import functools
+      from objtracker import (objtrace, tracer, decorator)
+      self.__exclude_files = [objtrace.__file__, tracer.__file__, decorator.__file__, functools.__file__]
+    elif isinstance(exclude_files, list):
+      if exclude_files:
+        self.__exclude_files = exclude_files[:] + [os.path.abspath(f) for f in exclude_files if not f.startswith("/")]
+      else:
+        self.__exclude_files = None
+    else:
+      raise ValueError("exclude_files has to be a list")
+    self.config()
+
   def config(self) -> None:
     if not self.initialized:
       return
     
     config = {
       "log_func_args": self.log_func_args,
-      "output_file": self.output_file
+      "output_file": self.output_file,
+      "exclude_files": self.exclude_files
     }
     
     self._objtracker.config(**config)
