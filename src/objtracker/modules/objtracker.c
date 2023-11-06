@@ -324,7 +324,7 @@ static PyObject*
 objtracker_start(ObjTrackerObject *self, PyObject *args)
 {
   if (curr_tracker) {
-    printf("Warning! Overwrite tracker! You should not have two ObjTracker recording at the same time");
+    printf("Warning! Overwrite tracker! You should not have two ObjTracker recording at the same time\n");
   } else {
     curr_tracker = self;
   }

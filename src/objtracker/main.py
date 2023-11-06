@@ -26,6 +26,8 @@ class TraceUI(object):
                         help="show version of objtrace")
     parser.add_argument("--output_file", "-o", nargs="?", default=None,
                         help="output file path. End with .json")
+    parser.add_argument("--log_func_args", action="store_true", default=False,
+                        help="log all function arguments, this will introduce large overhead")
     parser.add_argument("--open", action="store_true", default=False,
                         help="open report in browser after saving")
     
@@ -49,11 +51,32 @@ class TraceUI(object):
       
     self.options, self.command = options, command
     self.init_kwargs = {
-      "verbose": self.verbose,
-      "output_file": self.output_file
+      # "verbose": self.verbose,
+      "output_file": self.output_file,
+      "log_func_args": options.log_func_args
     }
     
     return True, None
+  
+  def search_file(self, file_name: str) -> Optional[str]:
+    if os.path.isfile(file_name):
+      return file_name
+    
+    # search file in $PATH
+    if "PATH" in os.environ:
+      if sys.platform in ("linux", "linux2", "darwin"):
+        path_sep = ":"
+      elif sys.platform in ("win32",):
+        path_sep = ";"
+      else:  # pragma: no cover
+        return None
+      
+      for dir_name in os.environ["PATH"].split(path_sep):
+        candidate = os.path.join(dir_name, file_name)
+        if os.path.isfile(candidate):
+          return candidate
+    
+    return None
   
   def show_version(self):
     print(__version__)
@@ -62,8 +85,10 @@ class TraceUI(object):
   def run_command(self):
     command = self.command
     options = self.options
-    search_result = command[0]
-    
+    file_name = command[0]
+    search_result = self.search_file(file_name)
+    if not search_result:
+      return False, f"No such file as {file_name}"
     file_name = search_result
     with open(file_name, 'rb') as f:
       code_string = f.read()
@@ -82,7 +107,7 @@ class TraceUI(object):
     options = self.options
     self.parent_pid = os.getpid()
     
-    objtrace = Tracker()
+    objtrace = Tracker(**self.init_kwargs)
     self.objtrace = objtrace
     
     def term_handler(signalnum, frame):
@@ -95,6 +120,8 @@ class TraceUI(object):
     exec(code, global_dict)
     
     objtrace.stop()
+    
+    return True, None
     
   def run(self):
     # if self.options.version:
