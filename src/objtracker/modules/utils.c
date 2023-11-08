@@ -62,7 +62,7 @@ void Print_Trace_Info(struct ObjectNode *node)
   }
 
   Printer("====== Trace Triggered ======", RED);
-  Printer("Call Stack (most recent call last):", RED);
+  Printer("Traceback (most recent call last):", RED);
   // if (log_stack > 0)
   //   Print_Stack(frame);
   Printer(ASUTF8(PyUnicode_FromFormat("lineno: %d -> %s (call: %s)", node->lineno, ASUTF8(node->filename), ASUTF8(node->name))), GREEN);
@@ -72,22 +72,24 @@ void Print_Trace_Info(struct ObjectNode *node)
   PyObject *key = NULL;
   PyObject *value = NULL;
   while (PyDict_Next(func_args, &pos, &key, &value)) {
-    if (PyLong_Check(value)) {
-      Printer(ASUTF8(PyUnicode_FromFormat("%s%s: Int = %s", "    ", ASUTF8(key), PyAsUTF8(value))), WHITE);
+    if (PyBool_Check(value)) {
+      Printer(ASUTF8(PyUnicode_FromFormat("%s%s: bool = %s", "    ", ASUTF8(key), PyAsUTF8(value))), WHITE);
+    } else if (PyLong_Check(value)) {
+      Printer(ASUTF8(PyUnicode_FromFormat("%s%s: int = %s", "    ", ASUTF8(key), PyAsUTF8(value))), WHITE);
     } else if (PyFloat_Check(value)) {
-      Printer(ASUTF8(PyUnicode_FromFormat("%s%s: Float = %s", "    ", ASUTF8(key), PyAsUTF8(value))), WHITE);
+      Printer(ASUTF8(PyUnicode_FromFormat("%s%s: float = %s", "    ", ASUTF8(key), PyAsUTF8(value))), WHITE);
     } else if (PyUnicode_Check(value)) {
-      Printer(ASUTF8(PyUnicode_FromFormat("%s%s: Str = %s", "    ", ASUTF8(key), PyAsUTF8(value))), WHITE);
+      Printer(ASUTF8(PyUnicode_FromFormat("%s%s: str = %s", "    ", ASUTF8(key), PyAsUTF8(value))), WHITE);
     } else if (PyList_Check(value)) {
-      Printer(ASUTF8(PyUnicode_FromFormat("%s%s: List = %s", "    ", ASUTF8(key), PyAsUTF8(value))), BLUE);
+      Printer(ASUTF8(PyUnicode_FromFormat("%s%s: list = %s", "    ", ASUTF8(key), PyAsUTF8(value))), BLUE);
     } else if (PyTuple_Check(value)) {
-      Printer(ASUTF8(PyUnicode_FromFormat("%s%s: Tuple = %s", "    ", ASUTF8(key), PyAsUTF8(value))), BLUE);
+      Printer(ASUTF8(PyUnicode_FromFormat("%s%s: tuple = %s", "    ", ASUTF8(key), PyAsUTF8(value))), BLUE);
     } else if (PyDict_Check(value)) {
-      Printer(ASUTF8(PyUnicode_FromFormat("%s%s: Dict = %s", "    ", ASUTF8(key), PyAsUTF8(value))), BLUE);
+      Printer(ASUTF8(PyUnicode_FromFormat("%s%s: dict = %s", "    ", ASUTF8(key), PyAsUTF8(value))), BLUE);
     } else if (PySet_Check(value)) {
-      Printer(ASUTF8(PyUnicode_FromFormat("%s%s: Set = %s", "    ", ASUTF8(key), PyAsUTF8(value))), BLUE);
+      Printer(ASUTF8(PyUnicode_FromFormat("%s%s: set = %s", "    ", ASUTF8(key), PyAsUTF8(value))), BLUE);
     } else if (PyBytes_Check(value)) {
-      Printer(ASUTF8(PyUnicode_FromFormat("%s%s: Bytes = ...", "    ", ASUTF8(key))), BLUE);
+      Printer(ASUTF8(PyUnicode_FromFormat("%s%s: bytes = ...", "    ", ASUTF8(key))), BLUE);
     } else {
       Printer(ASUTF8(PyUnicode_FromFormat("%s%s: %s = %s", "    ", ASUTF8(key), PyAsUTF8(PyObject_Type(value)), ASUTF8(PyObject_Repr(value)))), MAGENTA);
     }
