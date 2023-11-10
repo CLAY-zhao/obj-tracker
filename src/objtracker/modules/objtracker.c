@@ -638,19 +638,19 @@ objtracker_dump(ObjTrackerObject *self, PyObject *args)
 
     Py_DECREF(current_process_method);
     Py_DECREF(current_process);
-    fprintf(fptr, "{\"ph\":\"M\",\"pid\":%lu,\"tid\":%lu,\"name\":\"process_name\",\"args\":{\"name\":\"%s\"}},",
-            pid, pid, PyUnicode_AsUTF8(process_name));
+    // fprintf(fptr, "{\"ph\":\"M\",\"pid\":%lu,\"tid\":%lu,\"name\":\"process_name\",\"args\":{\"name\":\"%s\"}},",
+    //         pid, pid, PyUnicode_AsUTF8(process_name));
     Py_DECREF(process_name);
   }
 
   // Thread Name
-  metadata = self->metadata;
-  while (metadata) {
-    fprintf(fptr, "{\"ph\":\"M\",\"pid\":%lu,\"tid\":%lu,\"name\":\"thread_name\",\"args\":{\"name\":\"",
-            pid, metadata->tid);
-    fprintf(fptr, "\"}},");
-    metadata = metadata->next;
-  }
+  // metadata = self->metadata;
+  // while (metadata) {
+  //   fprintf(fptr, "{\"ph\":\"M\",\"pid\":%lu,\"tid\":%lu,\"name\":\"thread_name\",\"args\":{\"name\":\"",
+  //           pid, metadata->tid);
+  //   fprintf(fptr, "\"}},");
+  //   metadata = metadata->next;
+  // }
 
   PyObject *key = NULL;
   PyObject *value = NULL;
