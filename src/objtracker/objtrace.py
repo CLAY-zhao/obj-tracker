@@ -75,7 +75,6 @@ class Tracker(_Tracker):
     
     with open(output_file, "r") as file:
       data = file.read()
-      data = data.replace("\\", "/")
       
     data = replace_backslashes(json.loads(data))
     

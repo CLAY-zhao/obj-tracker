@@ -224,11 +224,11 @@ static void log_func_args(struct ObjectNode *node, PyFrameObject *frame)
         PyErr_Clear();
       }
       if (PyObject_Size(value) > 20) {
-        PyDict_SetItem(func_arg_dict, name, PyUnicode_FromString("too long..."));
+        PyDict_SetItem(func_arg_dict, name, PyUnicode_FromString("..."));
       } else if (PyBytes_Check(value)) {
-        PyDict_SetItem(func_arg_dict, name, PyUnicode_FromString("too long.."));
+        PyDict_SetItem(func_arg_dict, name, PyUnicode_FromString("..."));
       } else if (PyCode_Check(value)) {
-        PyDict_SetItem(func_arg_dict, name, PyUnicode_FromString("too long..."));
+        PyDict_SetItem(func_arg_dict, name, PyUnicode_FromString("..."));
       } else {
         PyDict_SetItem(func_arg_dict, name, value);
       }
@@ -651,7 +651,6 @@ objtracker_dump(ObjTrackerObject *self, PyObject *args)
   //   fprintf(fptr, "\"}},");
   //   metadata = metadata->next;
   // }
-
   PyObject *key = NULL;
   PyObject *value = NULL;
   while (node) {
@@ -661,6 +660,7 @@ objtracker_dump(ObjTrackerObject *self, PyObject *args)
     }
     long long ts_long = node->ts / 1000;
     long long dur_long = node->dur / 10;
+    PyObject* fname = PyUnicode_Replace(node->filename, PyUnicode_FromString("\\"), PyUnicode_FromString("\\\\"), -1);
     fprintf(
       fptr, "{\"pid\":%lu,\"tid\":%lu,\"ts\":%lld.%03lld,\"ph\":\"X\",\"dur\":%lld.%03lld,\"cat\":\"fee\",\"name\":\"%s (%s)\",\"args\":{\"vars\":[",
       pid,
@@ -670,8 +670,9 @@ objtracker_dump(ObjTrackerObject *self, PyObject *args)
       dur_long / 1000,
       dur_long % 1000,
       PyUnicode_AsUTF8(node->name),
-      PyUnicode_AsUTF8(node->filename)
+      PyUnicode_AsUTF8(fname)
     );
+    Py_DECREF(fname);
 
     PyObject *args = PyDict_GetItemString(node->args, "func_args");
     if (args) {
