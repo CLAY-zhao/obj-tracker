@@ -426,14 +426,7 @@ objtracker_tracefunc(PyObject *obj, PyFrameObject *frame, int what, PyObject *ar
         }
       }
 
-      if (self->breakpoint & 0x1) {
-        // update frame
-        PyObject* setup = PyObject_GetAttrString(self->pdb, "setup");
-        PyObject* tuple = PyTuple_New(2);
-        PyTuple_SetItem(tuple, 0, (PyObject *) frame);
-        PyTuple_SetItem(tuple, 1, Py_None);
-        PyObject_CallObject(setup, tuple);
-
+      if (self->breakpoint) {
         PyObject* set_trace = PyObject_GetAttrString(self->pdb, "set_trace");
         PyObject_CallObject(set_trace, NULL);
       }
@@ -470,14 +463,7 @@ objtracker_tracefunc(PyObject *obj, PyFrameObject *frame, int what, PyObject *ar
       }
     }
 
-    if (self->breakpoint & 0x1) {
-      // update frame
-      PyObject* setup = PyObject_GetAttrString(self->pdb, "setup");
-      PyObject* tuple = PyTuple_New(2);
-      PyTuple_SetItem(tuple, 0, (PyObject *) frame);
-      PyTuple_SetItem(tuple, 1, Py_None);
-      PyObject_CallObject(setup, tuple);
-
+    if (self->breakpoint) {
       PyObject* set_trace = PyObject_GetAttrString(self->pdb, "set_trace");
       PyObject_CallObject(set_trace, NULL);
     }

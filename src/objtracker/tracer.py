@@ -4,7 +4,7 @@ from typing import Optional, Union, Callable, List, Tuple, Sequence, Any
 import objtracker.tracker as objtracker
 
 from . import __version__
-from .cmdline import Cmd
+from .pob import Pob
 
 
 class _Tracker(object):
@@ -23,7 +23,7 @@ class _Tracker(object):
     self.breakpoint = breakpoint
     self.output_file = output_file
     self.exclude_files = exclude_files
-    self.pdb = Cmd(self)
+    self.pdb = Pob(self)
     self._objtracker = objtracker.ObjTracker(self.pdb)
     self.initialized = True
 
@@ -47,8 +47,8 @@ class _Tracker(object):
   
   @breakpoint.setter
   def breakpoint(self, breakpoint: bool) -> bool:
-    if isinstance(breakpoint, (bool, int)):
-      self.__breakpoint = 1 if breakpoint is True else breakpoint
+    if isinstance(breakpoint, bool):
+      self.__breakpoint = breakpoint
     else:
       raise ValueError(f"breakpoint needs to be True or False, not {breakpoint}")
     self.config()
