@@ -1,9 +1,10 @@
 import os
-from typing import Optional, Union, Callable, List, Tuple, Sequence
+from typing import Optional, Union, Callable, List, Tuple, Sequence, Any
 
 import objtracker.tracker as objtracker
 
 from . import __version__
+from .cmdline import Cmd
 
 
 class _Tracker(object):
@@ -11,16 +12,19 @@ class _Tracker(object):
   def __init__(
       self,
       log_func_args: bool = False,
+      breakpoint: bool = False,
       output_file: Optional[str] = None,
-      exclude_files: Optional[List] = None
+      exclude_files: Optional[List] = None,
     ) -> None:
     self.initialized = False
     self.enable = False
     self.parsed = False
-    self._objtracker = objtracker.ObjTracker()
     self.log_func_args = log_func_args
+    self.breakpoint = breakpoint
     self.output_file = output_file
     self.exclude_files = exclude_files
+    self.pdb = Cmd(self)
+    self._objtracker = objtracker.ObjTracker(self.pdb)
     self.initialized = True
 
   @property
@@ -35,6 +39,18 @@ class _Tracker(object):
       self.__log_func_args = log_func_args
     else:
       raise ValueError(f"log_func_args needs to be True or False, not {log_func_args}")
+    self.config()
+  
+  @property
+  def breakpoint(self):
+    return self.__breakpoint
+  
+  @breakpoint.setter
+  def breakpoint(self, breakpoint: bool) -> bool:
+    if isinstance(breakpoint, (bool, int)):
+      self.__breakpoint = 1 if breakpoint is True else breakpoint
+    else:
+      raise ValueError(f"breakpoint needs to be True or False, not {breakpoint}")
     self.config()
   
   @property
@@ -76,6 +92,7 @@ class _Tracker(object):
     
     config = {
       "log_func_args": self.log_func_args,
+      "breakpoint": self.breakpoint,
       "output_file": self.output_file,
       "exclude_files": self.exclude_files
     }

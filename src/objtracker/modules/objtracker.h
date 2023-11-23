@@ -69,6 +69,8 @@ typedef struct
   PyMutex mutex;
 #endif
   struct MetadataNode* metadata;
+  int breakpoint;
+  PyObject* pdb;
 } ObjTrackerObject;
 
 extern PyObject* inspect_module;

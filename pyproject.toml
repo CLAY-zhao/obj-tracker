@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "objtracker"
 authors = [{name = "Chiu Wai Ming", email = "anothersm@163.com"}]
 description = "This is a traceable object that allows you to see the parameters passed more clearly when the object is called."
-dependencies = []
+dependencies = ["objprint>0.1.3"]
 readme = "README.md"
 requires-python = ">=3.8"
 license = {file = "LICENSE"}

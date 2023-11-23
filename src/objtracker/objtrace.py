@@ -5,7 +5,7 @@ from types import MethodType, FunctionType
 from typing import Optional, Union, Callable, List, Tuple
 
 from .utils import replace_backslashes
-from .color_util import COLOR
+from .color_util import COLOR as _
 from .tracer import _Tracker
 
 
@@ -14,12 +14,14 @@ class Tracker(_Tracker):
   def __init__(
       self,
       log_func_args: bool = False,
+      breakpoint: bool = False,
       output_file: str = "result.json",
       exclude_files: Optional[List] = None,
       register_global: bool = True
   ) -> None:
     super().__init__(
       log_func_args=log_func_args,
+      breakpoint=breakpoint,
       output_file=output_file,
       exclude_files=exclude_files
     )
@@ -75,8 +77,11 @@ class Tracker(_Tracker):
     
     with open(output_file, "r") as file:
       data = file.read()
-      
-    data = replace_backslashes(json.loads(data))
+    
+    try:
+      data = replace_backslashes(json.loads(data))
+    except json.decoder.JSONDecodeError:
+      return
     
     with open(output_file, "w") as updated:
       json.dump(data, updated, ensure_ascii=False, indent=4)

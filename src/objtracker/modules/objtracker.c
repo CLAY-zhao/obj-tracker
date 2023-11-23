@@ -34,7 +34,6 @@ static void log_func_args(struct ObjectNode *node, PyFrameObject *frame);
 static void trace_return_value(struct ReturnTrace *returntrace, PyFrameObject *frame, PyObject *arg);
 
 ObjTrackerObject* curr_tracker = NULL;
-PyObject* pdb_module = NULL;
 PyObject* inspect_module = NULL;
 PyObject* traceback_module = NULL;
 PyObject* thread_module = NULL;
@@ -422,6 +421,20 @@ objtracker_tracefunc(PyObject *obj, PyFrameObject *frame, int what, PyObject *ar
           Print_Trace_Info(self->trackernode);
         }
       }
+
+      if (self->breakpoint & 0x1) {
+        // update frame
+        PyObject* setup = PyObject_GetAttrString(self->pdb, "setup");
+        PyObject* tuple = PyTuple_New(2);
+        PyTuple_SetItem(tuple, 0, (PyObject *) frame);
+        PyTuple_SetItem(tuple, 1, Py_None);
+        PyObject_CallObject(setup, tuple);
+
+        PyObject* set_trace = PyObject_GetAttrString(self->pdb, "set_trace");
+        PyObject_CallObject(set_trace, NULL);
+      } else if (self->breakpoint & 0x2) {
+        exit(-1);
+      }
       
       if (self->tracecallback) {
         trigger_trace_hook(self);
@@ -434,6 +447,39 @@ objtracker_tracefunc(PyObject *obj, PyFrameObject *frame, int what, PyObject *ar
       if (self->returntrace) {
         trace_return_value(self->returntrace, frame, arg);
       }
+    }
+  } else if (what == PyTrace_LINE) {
+    // Check include/exclude files
+    if (self->exclude_files) {
+      PyObject* files = NULL;
+      int record = 0;
+      files = self->exclude_files;
+      Py_ssize_t length = PyList_GET_SIZE(files);
+      PyObject* name = frame->f_code->co_filename;
+      for (int i = 0; i < length; i++) {
+        PyObject* f = PyList_GET_ITEM(files, i);
+        if (startswith(PyUnicode_AsUTF8(name), PyUnicode_AsUTF8(f))) {
+          record++;
+          break;
+        }
+      }
+      if (record != 0) {
+        return 0;
+      }
+    }
+
+    if (self->breakpoint & 0x1) {
+      // update frame
+      PyObject* setup = PyObject_GetAttrString(self->pdb, "setup");
+      PyObject* tuple = PyTuple_New(2);
+      PyTuple_SetItem(tuple, 0, (PyObject *) frame);
+      PyTuple_SetItem(tuple, 1, Py_None);
+      PyObject_CallObject(setup, tuple);
+
+      PyObject* set_trace = PyObject_GetAttrString(self->pdb, "set_trace");
+      PyObject_CallObject(set_trace, NULL);
+    } else if (self->breakpoint & 0x2) {
+      exit(-1);
     }
   }
 
@@ -551,13 +597,15 @@ objtracker_addreturntrace(ObjTrackerObject *obj, PyObject *args, PyObject *kwds)
 static PyObject*
 objtracker_config(ObjTrackerObject *self, PyObject *args, PyObject *kwds)
 {
-  static char* kwlist[] = {"log_func_args", "output_file", 
+  static char* kwlist[] = {"log_func_args", "breakpoint", "output_file", 
           "exclude_files", NULL};
   int kw_log_func_args = 0;
+  int kw_breakpoint = 0;
   char* kw_output_file = NULL;
   PyObject* kw_exclude_files = NULL;
-  if (!PyArg_ParseTupleAndKeywords(args, kwds, "|isO", kwlist,
+  if (!PyArg_ParseTupleAndKeywords(args, kwds, "|iisO", kwlist,
         &kw_log_func_args,
+        &kw_breakpoint,
         &kw_output_file,
         &kw_exclude_files)) {
       return NULL;
@@ -565,6 +613,10 @@ objtracker_config(ObjTrackerObject *self, PyObject *args, PyObject *kwds)
 
   if (kw_log_func_args >= 0) {
     self->log_func_args = kw_log_func_args;
+  }
+
+  if (kw_breakpoint >= 0) {
+    self->breakpoint = kw_breakpoint;
   }
 
   if (kw_output_file) {
@@ -785,6 +837,12 @@ ObjTracker_New(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 #if _WIN32
     QueryPerformanceFrequency(&qpc_freq);
 #endif
+    if (!PyArg_ParseTuple(args, "O", &self->pdb)) {
+      printf("You need to specify pdb when initializing Tracer\n");
+      exit(-1);
+    }
+
+    self->breakpoint = 0;
     self->trace_total = 0;
     self->collecting = 0;
     self->log_func_args = 0;
@@ -841,7 +899,6 @@ PyInit_tracker(void)
     return NULL;
   }
 
-  pdb_module = PyImport_ImportModule("pdb");
   inspect_module = PyImport_ImportModule("inspect");
   traceback_module = PyImport_ImportModule("traceback");
   thread_module = PyImport_ImportModule("threading");
