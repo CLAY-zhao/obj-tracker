@@ -379,6 +379,10 @@ objtracker_tracefunc(PyObject *obj, PyFrameObject *frame, int what, PyObject *ar
     return 0;
   }
 
+  if (self->breakpoint & 0x2) {
+    exit(-1);
+  }
+
   if (what == PyTrace_CALL || what == PyTrace_RETURN || 
         what == PyTrace_C_CALL || what == PyTrace_C_RETURN || what == PyTrace_C_EXCEPTION) {
     int is_call = (what == PyTrace_CALL || what == PyTrace_C_CALL);
@@ -432,8 +436,6 @@ objtracker_tracefunc(PyObject *obj, PyFrameObject *frame, int what, PyObject *ar
 
         PyObject* set_trace = PyObject_GetAttrString(self->pdb, "set_trace");
         PyObject_CallObject(set_trace, NULL);
-      } else if (self->breakpoint & 0x2) {
-        exit(-1);
       }
       
       if (self->tracecallback) {
@@ -478,8 +480,6 @@ objtracker_tracefunc(PyObject *obj, PyFrameObject *frame, int what, PyObject *ar
 
       PyObject* set_trace = PyObject_GetAttrString(self->pdb, "set_trace");
       PyObject_CallObject(set_trace, NULL);
-    } else if (self->breakpoint & 0x2) {
-      exit(-1);
     }
   }
 

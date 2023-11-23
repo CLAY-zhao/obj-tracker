@@ -13,7 +13,7 @@ line_prefix = '\n-> '   # Probably a better default
 
 class Cmd(cmd.Cmd):
   
-  prompt = "(Orc) "
+  prompt = "(Pot) "
   
   def __init__(
       self,
