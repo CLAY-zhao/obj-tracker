@@ -14,6 +14,7 @@ class Pob(pdb.Pdb):
     super().__init__(*args, **kwargs)
     self.objtrace = objtrace
     self.prompt = "(Pot) "
+    self.output_all = False
 
   def _msg_val_func(self, arg, func):
     try:
@@ -27,3 +28,7 @@ class Pob(pdb.Pdb):
   
   def do_pp(self, arg):
     self._msg_val_func(arg, objprint)
+
+  def do_output(self, arg):
+     pass
+  do_o = do_output

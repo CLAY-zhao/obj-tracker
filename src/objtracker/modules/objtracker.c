@@ -425,8 +425,10 @@ objtracker_tracefunc(PyObject *obj, PyFrameObject *frame, int what, PyObject *ar
           Print_Trace_Info(self->trackernode);
         }
       }
-
+      
       if (self->breakpoint) {
+        PyObject* tuple = PyTuple_New(1);
+        PyTuple_SetItem(tuple, 0, (PyObject *) frame);
         PyObject* set_trace = PyObject_GetAttrString(self->pdb, "set_trace");
         PyObject_CallObject(set_trace, NULL);
       }
@@ -464,8 +466,10 @@ objtracker_tracefunc(PyObject *obj, PyFrameObject *frame, int what, PyObject *ar
     }
 
     if (self->breakpoint) {
+      PyObject* tuple = PyTuple_New(1);
+      PyTuple_SetItem(tuple, 0, (PyObject *) frame);
       PyObject* set_trace = PyObject_GetAttrString(self->pdb, "set_trace");
-      PyObject_CallObject(set_trace, NULL);
+      PyObject_CallObject(set_trace, tuple);
     }
   }
 

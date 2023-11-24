@@ -49,6 +49,8 @@ class _Tracker(object):
   def breakpoint(self, breakpoint: bool) -> bool:
     if isinstance(breakpoint, bool):
       self.__breakpoint = breakpoint
+      if breakpoint:
+        print("\033[0;33mWhen the breakpoint setting is enabled, log_func_args will be invalid.\033[0m")
     else:
       raise ValueError(f"breakpoint needs to be True or False, not {breakpoint}")
     self.config()
