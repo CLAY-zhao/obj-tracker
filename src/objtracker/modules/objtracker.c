@@ -379,33 +379,29 @@ objtracker_tracefunc(PyObject *obj, PyFrameObject *frame, int what, PyObject *ar
     return 0;
   }
 
-  if (self->breakpoint & 0x2) {
-    exit(-1);
+  // Check include/exclude files
+  if (self->exclude_files) {
+    PyObject* files = NULL;
+    int record = 0;
+    files = self->exclude_files;
+    Py_ssize_t length = PyList_GET_SIZE(files);
+    PyObject* name = frame->f_code->co_filename;
+    for (int i = 0; i < length; i++) {
+      PyObject* f = PyList_GET_ITEM(files, i);
+      if (startswith(PyUnicode_AsUTF8(name), PyUnicode_AsUTF8(f))) {
+        record++;
+        break;
+      }
+    }
+    if (record != 0) {
+      return 0;
+    }
   }
 
   if (what == PyTrace_CALL || what == PyTrace_RETURN || 
         what == PyTrace_C_CALL || what == PyTrace_C_RETURN || what == PyTrace_C_EXCEPTION) {
     int is_call = (what == PyTrace_CALL || what == PyTrace_C_CALL);
     int is_return = (what == PyTrace_RETURN || what == PyTrace_C_RETURN || what == PyTrace_C_EXCEPTION);
-
-    // Check include/exclude files
-    if (self->exclude_files) {
-      PyObject* files = NULL;
-      int record = 0;
-      files = self->exclude_files;
-      Py_ssize_t length = PyList_GET_SIZE(files);
-      PyObject* name = frame->f_code->co_filename;
-      for (int i = 0; i < length; i++) {
-        PyObject* f = PyList_GET_ITEM(files, i);
-        if (startswith(PyUnicode_AsUTF8(name), PyUnicode_AsUTF8(f))) {
-          record++;
-          break;
-        }
-      }
-      if (record != 0) {
-        return 0;
-      }
-    }
 
     if (is_call) {
       if (!self->trackernode) {
@@ -427,8 +423,6 @@ objtracker_tracefunc(PyObject *obj, PyFrameObject *frame, int what, PyObject *ar
       }
       
       if (self->breakpoint) {
-        PyObject* tuple = PyTuple_New(1);
-        PyTuple_SetItem(tuple, 0, (PyObject *) frame);
         PyObject* set_trace = PyObject_GetAttrString(self->pdb, "set_trace");
         PyObject_CallObject(set_trace, NULL);
       }
@@ -446,30 +440,9 @@ objtracker_tracefunc(PyObject *obj, PyFrameObject *frame, int what, PyObject *ar
       }
     }
   } else if (what == PyTrace_LINE) {
-    // Check include/exclude files
-    if (self->exclude_files) {
-      PyObject* files = NULL;
-      int record = 0;
-      files = self->exclude_files;
-      Py_ssize_t length = PyList_GET_SIZE(files);
-      PyObject* name = frame->f_code->co_filename;
-      for (int i = 0; i < length; i++) {
-        PyObject* f = PyList_GET_ITEM(files, i);
-        if (startswith(PyUnicode_AsUTF8(name), PyUnicode_AsUTF8(f))) {
-          record++;
-          break;
-        }
-      }
-      if (record != 0) {
-        return 0;
-      }
-    }
-
     if (self->breakpoint) {
-      PyObject* tuple = PyTuple_New(1);
-      PyTuple_SetItem(tuple, 0, (PyObject *) frame);
       PyObject* set_trace = PyObject_GetAttrString(self->pdb, "set_trace");
-      PyObject_CallObject(set_trace, tuple);
+      PyObject_CallObject(set_trace, NULL);
     }
   }
 
@@ -828,7 +801,7 @@ ObjTracker_New(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     QueryPerformanceFrequency(&qpc_freq);
 #endif
     if (!PyArg_ParseTuple(args, "O", &self->pdb)) {
-      printf("You need to specify pdb when initializing Tracer\n");
+      printf("You need to specify Pob when initializing Tracer\n");
       exit(-1);
     }
 

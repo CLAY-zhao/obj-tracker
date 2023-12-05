@@ -3,6 +3,8 @@
 
 import sys
 
+__all__ = ["warning_print"]
+
 class COLOR:
     BLACK = '\033[30m'
     RED = '\033[31m'
@@ -23,3 +25,7 @@ if sys.platform == "win32":
     kernel32.SetConsoleMode(kernel32.GetStdHandle(-11), 7)
   except Exception:
     pass
+
+
+def warning_print(message):
+  print(f"\033[0;{COLOR.YELLOW} {message} \033[0m")

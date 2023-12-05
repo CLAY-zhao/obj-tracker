@@ -23,7 +23,7 @@ class _Tracker(object):
     self.breakpoint = breakpoint
     self.output_file = output_file
     self.exclude_files = exclude_files
-    self.pdb = Pob(self)
+    self.pdb = Pob()
     self._objtracker = objtracker.ObjTracker(self.pdb)
     self.initialized = True
 
@@ -49,8 +49,6 @@ class _Tracker(object):
   def breakpoint(self, breakpoint: bool) -> bool:
     if isinstance(breakpoint, bool):
       self.__breakpoint = breakpoint
-      if breakpoint:
-        print("\033[0;33mWhen the breakpoint setting is enabled, log_func_args will be invalid.\033[0m")
     else:
       raise ValueError(f"breakpoint needs to be True or False, not {breakpoint}")
     self.config()

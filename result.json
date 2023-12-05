@@ -1,0 +1,38 @@
+{
+    "traceEvents": [
+        {
+            "pid": 24256,
+            "tid": 11140,
+            "ts": 948120426.048,
+            "ph": "X",
+            "dur": 1519966.05,
+            "cat": "fee",
+            "name": "f (e:/herokuapp/obj-tracker/tests/test_trace.py)",
+            "args": {
+                "vars": [
+                    {
+                        "name": "a",
+                        "type": "<class 'int'>",
+                        "value": "1"
+                    },
+                    {
+                        "name": "b",
+                        "type": "<class 'int'>",
+                        "value": "2"
+                    },
+                    {
+                        "name": "c",
+                        "type": "<class 'float'>",
+                        "value": "0.4923421902466444"
+                    },
+                    {
+                        "name": "name",
+                        "type": "<class 'str'>",
+                        "value": "'John'"
+                    }
+                ],
+                "lineno": 47
+            }
+        }
+    ]
+}
