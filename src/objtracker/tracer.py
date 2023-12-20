@@ -12,7 +12,7 @@ class _Tracker(object):
   def __init__(
       self,
       log_func_args: bool = False,
-      breakpoint: bool = False,
+      log_pob: bool = False,
       output_file: Optional[str] = None,
       exclude_files: Optional[List] = None,
     ) -> None:
@@ -20,11 +20,11 @@ class _Tracker(object):
     self.enable = False
     self.parsed = False
     self.log_func_args = log_func_args
-    self.breakpoint = breakpoint
+    self.log_pob = log_pob
     self.output_file = output_file
     self.exclude_files = exclude_files
-    self.pdb = Pob()
-    self._objtracker = objtracker.ObjTracker(self.pdb)
+    self.pob = Pob()
+    self._objtracker = objtracker.ObjTracker(self.pob)
     self.initialized = True
 
   @property
@@ -42,15 +42,15 @@ class _Tracker(object):
     self.config()
   
   @property
-  def breakpoint(self):
-    return self.__breakpoint
+  def log_pob(self):
+    return self.__log_pob
   
-  @breakpoint.setter
-  def breakpoint(self, breakpoint: bool) -> bool:
-    if isinstance(breakpoint, bool):
-      self.__breakpoint = breakpoint
+  @log_pob.setter
+  def log_pob(self, log_pob: bool) -> bool:
+    if isinstance(log_pob, bool):
+      self.__log_pob = log_pob
     else:
-      raise ValueError(f"breakpoint needs to be True or False, not {breakpoint}")
+      raise ValueError(f"log_pob needs to be True or False, not {log_pob}")
     self.config()
   
   @property
@@ -92,7 +92,7 @@ class _Tracker(object):
     
     config = {
       "log_func_args": self.log_func_args,
-      "breakpoint": self.breakpoint,
+      "log_pob": self.log_pob,
       "output_file": self.output_file,
       "exclude_files": self.exclude_files
     }

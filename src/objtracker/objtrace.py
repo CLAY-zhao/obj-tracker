@@ -14,14 +14,14 @@ class Tracker(_Tracker):
   def __init__(
       self,
       log_func_args: bool = False,
-      breakpoint: bool = False,
+      log_pob: bool = False,
       output_file: str = "result.json",
       exclude_files: Optional[List] = None,
       register_global: bool = True
   ) -> None:
     super().__init__(
       log_func_args=log_func_args,
-      breakpoint=breakpoint,
+      log_pob=log_pob,
       output_file=output_file,
       exclude_files=exclude_files
     )

@@ -60,6 +60,7 @@ typedef struct
   long fix_pid;
   int log_code_detail;
   int log_func_args;
+  int log_pob;
   struct ObjectNode* trackernode;
   struct TraceInfoCallback* tracecallback;
   struct ReturnTrace* returntrace;
@@ -69,7 +70,6 @@ typedef struct
   PyMutex mutex;
 #endif
   struct MetadataNode* metadata;
-  int breakpoint;
   PyObject* pdb;
 } ObjTrackerObject;
 

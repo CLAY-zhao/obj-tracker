@@ -422,7 +422,7 @@ objtracker_tracefunc(PyObject *obj, PyFrameObject *frame, int what, PyObject *ar
         }
       }
       
-      if (self->breakpoint) {
+      if (self->log_pob) {
         PyObject* set_trace = PyObject_GetAttrString(self->pdb, "set_trace");
         PyObject_CallObject(set_trace, NULL);
       }
@@ -440,7 +440,7 @@ objtracker_tracefunc(PyObject *obj, PyFrameObject *frame, int what, PyObject *ar
       }
     }
   } else if (what == PyTrace_LINE) {
-    if (self->breakpoint) {
+    if (self->log_pob) {
       PyObject* set_trace = PyObject_GetAttrString(self->pdb, "set_trace");
       PyObject_CallObject(set_trace, NULL);
     }
@@ -560,15 +560,15 @@ objtracker_addreturntrace(ObjTrackerObject *obj, PyObject *args, PyObject *kwds)
 static PyObject*
 objtracker_config(ObjTrackerObject *self, PyObject *args, PyObject *kwds)
 {
-  static char* kwlist[] = {"log_func_args", "breakpoint", "output_file", 
+  static char* kwlist[] = {"log_func_args", "log_pob", "output_file", 
           "exclude_files", NULL};
   int kw_log_func_args = 0;
-  int kw_breakpoint = 0;
+  int kw_log_pob = 0;
   char* kw_output_file = NULL;
   PyObject* kw_exclude_files = NULL;
   if (!PyArg_ParseTupleAndKeywords(args, kwds, "|iisO", kwlist,
         &kw_log_func_args,
-        &kw_breakpoint,
+        &kw_log_pob,
         &kw_output_file,
         &kw_exclude_files)) {
       return NULL;
@@ -578,8 +578,8 @@ objtracker_config(ObjTrackerObject *self, PyObject *args, PyObject *kwds)
     self->log_func_args = kw_log_func_args;
   }
 
-  if (kw_breakpoint >= 0) {
-    self->breakpoint = kw_breakpoint;
+  if (kw_log_pob >= 0) {
+    self->log_pob = kw_log_pob;
   }
 
   if (kw_output_file) {
@@ -805,10 +805,10 @@ ObjTracker_New(PyTypeObject *type, PyObject *args, PyObject *kwargs)
       exit(-1);
     }
 
-    self->breakpoint = 0;
     self->trace_total = 0;
     self->collecting = 0;
     self->log_func_args = 0;
+    self->log_pob = 0;
     self->fix_pid = 0;
     self->output_file = NULL;
     self->exclude_files = NULL;
